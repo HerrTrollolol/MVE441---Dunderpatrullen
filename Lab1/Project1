@@ -1,0 +1,67 @@
+Project 1
+Work in groups of 2-5. Prepare ~10 slides where one slide describes your setup and analysis, main results, challenges/suprises and take-home message.
+
+Everyone should do the first part of the project. You can then choose from one of the three themes for part 2.
+
+For the first part of the project, you will be working on a high-dimensional data from the cancer genom atlas (TCGA). The data matrices contain gene expression (relates to how much of a gene product (protein) is being produced) for 2000 randomly selected genes over 2887 cancer samples. There are 6 types of cancers in this data set. You don't need to know any bio for the project - just think of this as a 6 class data set with 2000 features.
+
+You will notice that the classes are quite imbalanced. There are a lot of breast cancer samples and very few uterine samples, etc.
+
+All of the project themes aim at you exploring how to make a method "crash" in some way - meaning that you illustrate when a particular method or approach would be a bad choice, or simple a situation when things might not work out as hoped for.
+
+For all tasks, you have to repeat the exercise in order to be able to draw conclusions. That is, one single run of a data analysis task or simulation has very limited information so repeat a few times to ensure you are not drawing conclusions based on a random "fluke".
+
+Part 1 - Dimension reduction and predictive modeling
+Everyone should do this task.
+
+High-dimensional data tend to be "data hungry". For some methods, high-dimensionality can results in a large number of parameters having to be estimated and as a consequence you might high estimation variance. It is therefore quite common to try to reduce the dimensionality of the problem prior to modeling. (An alternative to this is filtering where you remove a (possibly large) subset of features before modeling.
+
+In class we have so-far discussed a linear dimension reduction technique, PCA and some basic filtering based on e.g. variance, t or F-tests.
+
+You should explore at least 3 different classifiers of different character, from flexible to rigid (e.g. small k to large k in k-nearest neighbors). Feel free to try any other classifier you like as long as you explain if they are flexible or rigid.
+
+Perform cross-validation to select the number of principal components that optimizing predictive performance.
+Perform cross-validation to select the number features (genes) that optimizing predictive performance.
+Demonstrate the optimism of training by comparing the difference between training error, cross-validation error after selection of optimal PCs or features, and test error performance. Discuss the difference for the fleixble and rigid classifiers in terms of optimism.
+Repeat the above for 3 different size training sets and discuss the results.
+Voluntary - something to think about
+
+Can you construct a data set where PCA dimension reduction should improve classification performance?
+Can you construct a data set where PCA dimension reduction should reduce classification performance?
+Part 2 - Themes
+Theme 1 - Mislabeling
+There is currently quite a lot of active research into noisy data or mislabeled data and how this impacts model training and prediction performance of test data. "Dirty data" with mislabeling can be a result of a cheap data collection strategy that is less precise for example.
+
+Create a mislabeled data set from the cancer data by randomly changing the labels for some of the observations. Note, you should only create mislabels for your training data - the test data should be clean.
+
+Redo Part 1 in this setting.
+
+Which methods handle the mislabeling OK? which methods struggle?
+
+Does the presence of mislabeled data change the PC and feature selection at all? In what way?
+
+You should explore at least 3 levels of mislabeling (some modest, some more severe and some really severe cases), i.e. proportion of mislabeled data. Please note that your test data should be "clean", i.e. without mislabeling. For each simulation run, make sure you create a clean and separate data set to estimate prediction performance.
+
+Compare predictive performance across methods and discuss why one method might perform worse than another.
+
+Voluntary - something to think about* What happens if there are more mislabeling in one class than another (it's enough if you do this for one level of mislabeling)?
+What happens if the probability of mislabeling depends on the underlying features?
+
+Imbalanced data
+Imbalanced data is something one frequently encounters and it can have a big effect on classification tasks. For theme 2 you can explore various methods to deal with imbalance or you can focus more on demonstrating the effects of imbalance.
+
+I put 2 papers on canvas that discusses different approaches for dealing with imbalance: rebalancing the data or using a different training metric than the basic error rate.
+
+Theme 2
+Using the cancer data for inspiration, investigate (either by simulating data from scratch or by resampling/altering the cancer data) what happens to classification performance as a data set becomes more and more imbalanced. Note, you can simplify to look at only 2-3 classes if you like.
+
+One way to tackle imbalance is to use oversampling of the minority class(es) or undersampling of the majority class. Instead of straight-up oversampling one can augment the data with smooth interpolations from the minority class, so-called smote. You are welcome to look up packages that does this if you like or you can implement something yourselves from scratch.
+
+Does over/under/augment the data improve classification performance?
+
+Theme 3
+When you have imbalanced data it is often a good idea to not use misclassification error as your performance metric. That is because error rates can be extermely misleading. Say that 80 percent of your data belongs to class 1. Then a classifers that says "class 1" always will have an error rate of 20 percent.
+
+If you have imbalanced data you can use other performance metrics to a) evaluate performance, b) train classifiers and c) choose classifier settings (e.g. tuning parameters (say k in kNN), number of features, etc).
+
+Explore at least one other metric for performance (e.g. kappa, MCC, sensitivity etc) (see papers and demo/lecture notes). Compare the results you obtain using vanilla error rate as your training metric.
