@@ -1,15 +1,42 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
-from numpy.linalg import svd
 from sklearn.model_selection import KFold
 import argparse
+from imblearn.over_sampling import SMOTE, RandomOverSampler
+from imblearn.under_sampling import RandomUnderSampler
+
+
+def sampling(TCGAdata, TCGAlabels, sampling_type):
+    TCGAdata_resampled, TCGAlabels_resampled = TCGAdata, TCGAlabels
+    if sampling_type == "SMOTE":
+        smote = SMOTE()
+
+        TCGAdata_resampled, TCGAlabels_resampled = smote.fit_resample(
+            TCGAdata, TCGAlabels
+        )
+    elif sampling_type == "OVER":
+        ros = RandomOverSampler()
+
+        TCGAdata_resampled, TCGAlabels_resampled = ros.fit_resample(
+            TCGAdata, TCGAlabels
+        )
+
+    elif sampling_type == "UNDER":
+        rus = RandomUnderSampler()
+
+        TCGAdata_resampled, TCGAlabels_resampled = rus.fit_resample(
+            TCGAdata, TCGAlabels
+        )
+
+    return TCGAdata_resampled, TCGAlabels_resampled
 
 
 def main(args):
     TCGAdata = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
     TCGAlabels = np.loadtxt("TCGAlabels", skiprows=1, usecols=1, dtype=str)
+
+    TCGAdata, TCGAlabels = sampling(TCGAdata, TCGAlabels, args.sampling_type)
 
     # Shuffle the combined data
     suffle_indecies = np.arange(0, 2887, 1)
@@ -75,9 +102,9 @@ def main(args):
     plt.title(
         f"k_f = {k_f}, k_n = {k_n}, max accuracy = {round(np.max(end_test_accuracy), 3)} at i = {x_axis[np.argmax(end_test_accuracy)]}"
     )
-    plt.plot(x_axis, end_accuracy, label="valid")
-    plt.plot(x_axis, end_train_accuracy, label="train")
-    plt.plot(x_axis, end_test_accuracy, label="test")
+    plt.plot(x_axis, end_accuracy, label="Valid")
+    plt.plot(x_axis, end_train_accuracy, label="Train")
+    plt.plot(x_axis, end_test_accuracy, label="Test")
     plt.legend()
     plt.show()
 
@@ -89,5 +116,14 @@ if __name__ == "__main__":
     parser.add_argument("--max_dim", type=int, default=2000)
     parser.add_argument("--dim_step", type=int, default=1)
     parser.add_argument("--train_share", type=float, default=0.8)
+    parser.add_argument("--sampling_type", type=str, default="None")
     args = parser.parse_args()
     main(args)
+
+
+# Category "GBM": 172 occurrences, 5.96% of total data
+# Category "BC": 1215 occurrences, 42.09% of total data
+# Category "OV": 266 occurrences, 9.21% of total data
+# Category "LU": 571 occurrences, 19.78% of total data
+# Category "KI": 606 occurrences, 20.99% of total data
+# Category "U": 57 occurrences, 1.97% of total data
