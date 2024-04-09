@@ -40,7 +40,7 @@ def imbalance(TCGAdata, TCGAlabels):
     # orignial data (172,1215,266,571,606,57)
     sampling_strategy = {
         '"GBM"': 50,
-        '"BC"': 200,
+        '"BC"': 1200,
         '"OV"': 50,
         '"LU"': 50,
         '"KI"': 50,
