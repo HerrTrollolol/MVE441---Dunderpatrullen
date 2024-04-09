@@ -32,14 +32,36 @@ def sampling(TCGAdata, TCGAlabels, sampling_type):
     return TCGAdata_resampled, TCGAlabels_resampled
 
 
-def main(args):
+def imbalance(TCGAdata, TCGAlabels):
+    # orignial data (172,1215,266,571,606,57)
+    sampling_strategy = {
+        '"GBM"': 30,
+        '"BC"': 1215,
+        '"OV"': 30,
+        '"LU"': 571,
+        '"KI"': 606,
+        '"U"': 30,
+    }
+    # Initialize the RandomUnderSampler with the defined strategy
+    rus = RandomUnderSampler(sampling_strategy=sampling_strategy)
+
+    # Resample the dataset
+    TCGAdata_resampled, TCGAlabels_resampled = rus.fit_resample(TCGAdata, TCGAlabels)
+    return TCGAdata_resampled, TCGAlabels_resampled
+
+
+def main(args, ax):
     TCGAdata = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
     TCGAlabels = np.loadtxt("TCGAlabels", skiprows=1, usecols=1, dtype=str)
+
+    if args.imbalance:
+        TCGAdata, TCGAlabels = imbalance(TCGAdata, TCGAlabels)
 
     TCGAdata, TCGAlabels = sampling(TCGAdata, TCGAlabels, args.sampling_type)
 
     # Shuffle the combined data
-    suffle_indecies = np.arange(0, 2887, 1)
+    print(f"number of data points: {TCGAlabels.shape[0]}")
+    suffle_indecies = np.arange(0, TCGAlabels.shape[0] - 1, 1)
     np.random.shuffle(suffle_indecies)
 
     # Split the shuffled data and labels into training and test sets
@@ -62,7 +84,7 @@ def main(args):
     end_test_accuracy = []
     x_axis = []
 
-    for i in range(1, args.max_dim, args.dim_step):
+    for i in range(1, args.max_dim + 1, args.dim_step):
         X = sorted_vector[:, :i]
         x_axis.append(i)
         accuracies = []
@@ -99,17 +121,29 @@ def main(args):
         test_predictions = np.sum(knn.predict(TCGAdata_test[:, :i]) == TCGAlabels_test)
         end_test_accuracy.append(test_predictions / len(TCGAlabels_test))
 
-    plt.title(
-        f"k_f = {k_f}, k_n = {k_n}, max accuracy = {round(np.max(end_test_accuracy), 3)} at i = {x_axis[np.argmax(end_test_accuracy)]}"
+    print(f"test accuracy: {end_test_accuracy[np.argmax(end_accuracy)]}")
+    ax.set_title(
+        f"Sampling type: {args.sampling_type} - Test error: {round(1-end_test_accuracy[np.argmax(end_accuracy)],3)}"
     )
-    plt.plot(x_axis, end_accuracy, label="Valid")
-    plt.plot(x_axis, end_train_accuracy, label="Train")
-    plt.plot(x_axis, end_test_accuracy, label="Test")
-    plt.legend()
-    plt.show()
+    ax.plot(x_axis, [1 - x for x in end_accuracy], label="Valid")
+    ax.plot(x_axis, [1 - x for x in end_train_accuracy], label="Train")
+    ax.plot(x_axis, [1 - x for x in end_test_accuracy], label="Test")
+    ax.plot(
+        x_axis,
+        [1 - end_test_accuracy[np.argmax(end_accuracy)]] * len(x_axis),
+        "-.",
+        linewidth=0.5,
+        color="black",
+        label="Best model",
+    )
+    ax.set_ylabel("Error")
+    ax.set_xlabel("Dimension")
+    ax.set_yscale("log")
+    ax.legend()
 
 
 if __name__ == "__main__":
+    alt = ["NONE", "SMOTE", "OVER", "UNDER"]
     parser = argparse.ArgumentParser()
     parser.add_argument("--folds", type=int, default=10)
     parser.add_argument("--neighbours", type=int, default=10)
@@ -117,8 +151,30 @@ if __name__ == "__main__":
     parser.add_argument("--dim_step", type=int, default=1)
     parser.add_argument("--train_share", type=float, default=0.8)
     parser.add_argument("--sampling_type", type=str, default="None")
+    parser.add_argument("--plot_all", action="store_true", default=False)
+    parser.add_argument("--imbalance", action="store_true", default=False)
     args = parser.parse_args()
-    main(args)
+    if args.plot_all:
+        y_limits = (10**-4, 1)
+        fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+
+        axs_flat = axs.flatten()
+
+        for i, ax in enumerate(axs_flat):
+            args.sampling_type = alt[i]
+            # Setting the same y-axis limits
+            main(args, ax)
+            ax.set_ylim(y_limits)
+        plt.tight_layout(pad=3.0)
+        plt.show()
+
+    else:
+        y_limits = (10**-4, 1)
+        fig, ax = plt.subplots(figsize=(10, 7))
+        main(args, ax)
+        ax.set_ylim(y_limits)
+        plt.tight_layout(pad=3.0)
+        plt.show()
 
 
 # Category "GBM": 172 occurrences, 5.96% of total data
