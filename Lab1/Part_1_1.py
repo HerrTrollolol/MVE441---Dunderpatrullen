@@ -165,7 +165,7 @@ def main(args, ax):
         plt.ylabel("Actual")
         plt.xlabel("Predicted")
         plt.title("Confusion Matrix")
-        plt.show()
+        # plt.show()
 
 
 if __name__ == "__main__":
