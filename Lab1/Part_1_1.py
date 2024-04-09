@@ -165,7 +165,7 @@ def main(args, ax):
         plt.ylabel("Actual")
         plt.xlabel("Predicted")
         plt.title("Confusion Matrix")
-        # plt.show()
+        plt.show()
 
 
 if __name__ == "__main__":
@@ -199,4 +199,5 @@ if __name__ == "__main__":
         main(args, ax)
         ax.set_ylim(y_limits)
         plt.tight_layout(pad=3.0)
+        plt.title("VAD I HELVETE")
         plt.show()
