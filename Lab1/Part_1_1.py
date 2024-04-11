@@ -152,7 +152,7 @@ def main(args, ax):
     ax.set_yscale("log")
     ax.legend()
 
-    if not args.plot_all:
+    if not (args.plot_all or args.plot_all_2):
         cm = confusion_matrix(TCGAlabels_test, best_test_prediction, normalize="pred")
         plt.figure(figsize=(10, 7))
         sns.heatmap(
@@ -170,6 +170,9 @@ def main(args, ax):
 
 if __name__ == "__main__":
     alt = ["NONE", "SMOTE", "OVER", "UNDER"]
+    ns = [3, 10, 100]
+    ss = [0.5, 0.7, 0.9]
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--folds", type=int, default=10)
     parser.add_argument("--neighbours", type=int, default=10)
@@ -178,6 +181,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_share", type=float, default=0.8)
     parser.add_argument("--sampling_type", type=str, default="None")
     parser.add_argument("--plot_all", action="store_true", default=False)
+    parser.add_argument("--plot_all_2", action="store_true", default=False)
     parser.add_argument("--imbalance", action="store_true", default=False)
     args = parser.parse_args()
     if args.plot_all:
@@ -192,6 +196,36 @@ if __name__ == "__main__":
             main(args, ax)
             ax.set_ylim(y_limits)
         plt.tight_layout(pad=3.0)
+        plt.show()
+
+    elif args.plot_all_2:
+        # Create a 3x3 grid for plotting, adjust figsize as needed
+        fig, axs = plt.subplots(3, 3, figsize=(15, 15))
+        axs_flat = axs.flatten()
+
+        # Set y-axis limits
+        y_limits = (10**-4, 1)
+
+        # Iterate through each combination of elements from list1 and list2
+        i = 0  # Index to access flattened axes
+        for elem1 in ns:
+            for elem2 in ss:
+                ax = axs_flat[i]
+                # Assuming you modify args or call main() based on elem1 and elem2
+                # Example modification, replace with actual usage:
+                args.neighbours = elem1
+                args.train_share = elem2
+                main(args, ax)  # Call your main plotting function
+                ax.set_ylim(y_limits)
+                ax.set_title(
+                    f"Combination: {elem1}, {elem2}"
+                )  # Optional: set title for subplot
+                i += 1  # Move to the next subplot
+
+        # Ensure there's no overlap in the layout
+        plt.tight_layout(pad=3.0)
+
+        # Display the plot
         plt.show()
     else:
         y_limits = (10**-4, 1)
