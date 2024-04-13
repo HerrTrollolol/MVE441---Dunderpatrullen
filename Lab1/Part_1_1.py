@@ -152,7 +152,7 @@ def main(args, ax):
     ax.set_yscale("log")
     ax.legend()
 
-    if not (args.plot_all or args.plot_all_2):
+    if not (args.plot_all or args.plot_all_2 or args.plot_variance):
         cm = confusion_matrix(TCGAlabels_test, best_test_prediction, normalize="pred")
         plt.figure(figsize=(10, 7))
         sns.heatmap(
@@ -166,6 +166,7 @@ def main(args, ax):
         plt.xlabel("Predicted")
         plt.title("Confusion Matrix")
         plt.show()
+    return [1 - x for x in end_test_accuracy]
 
 
 if __name__ == "__main__":
@@ -182,6 +183,7 @@ if __name__ == "__main__":
     parser.add_argument("--sampling_type", type=str, default="None")
     parser.add_argument("--plot_all", action="store_true", default=False)
     parser.add_argument("--plot_all_2", action="store_true", default=False)
+    parser.add_argument("--plot_variance", action="store_true", default=False)
     parser.add_argument("--imbalance", action="store_true", default=False)
     args = parser.parse_args()
     if args.plot_all:
@@ -223,10 +225,65 @@ if __name__ == "__main__":
                 i += 1  # Move to the next subplot
 
         # Ensure there's no overlap in the layout
-        plt.tight_layout(pad=3.0)
+        plt.tight_layout(pad=6.0)
 
         # Display the plot
         plt.show()
+    elif args.plot_variance:
+        colors = ["blue", "green", "red"]
+        share_values = [
+            0.5,
+            0.7,
+            0.9,
+        ]  # Different share values for training or other uses
+        alpha_values = [0.2, 0.4, 0.6]  # Different alpha values for visibility
+
+        all_case_results = []
+
+        for index, share_value in enumerate(share_values):
+            args.train_share = share_value  # Modify args accordingly if necessary
+            test_result = []
+
+            for i in range(5):  # Run each case 2 times
+                fig, ax = plt.subplots(figsize=(10, 7))
+                result = main(args, ax)[
+                    10:20
+                ]  # Assuming main() returns a list, and you're interested in elements 10 to 20
+                test_result.append(result)
+                plt.close(fig)
+
+            all_results_array = np.array(test_result)
+            means = np.mean(all_results_array, axis=0)
+            std_devs = np.std(all_results_array, axis=0)
+            all_case_results.append((means, std_devs))
+
+        # Plotting all cases on the same plot
+        fig, ax = plt.subplots(figsize=(10, 7))
+        iterations = range(
+            len(all_case_results[0][0])
+        )  # Assuming the length of means corresponds to the number of iterations
+
+        for (means, std_devs), color, alpha, share_value in zip(
+            all_case_results, colors, alpha_values, share_values
+        ):
+            ax.plot(
+                iterations, means, label=f"Mean Train Share {share_value}", color=color
+            )
+            ax.fill_between(
+                iterations,
+                means - std_devs,
+                means + std_devs,
+                color=color,
+                alpha=alpha,
+                label=f"Mean ± STD Train Share {share_value}",
+            )
+
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Result")
+        ax.set_title("Mean and Standard Deviation of Results Over Multiple Runs")
+        ax.legend()
+        plt.show()
+
     else:
         y_limits = (10**-4, 1)
         fig, ax = plt.subplots(figsize=(10, 7))
