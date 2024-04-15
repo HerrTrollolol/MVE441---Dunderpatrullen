@@ -164,6 +164,7 @@ def main(args, ax):
         plt.xlabel("Predicted")
         plt.title("Confusion Matrix")
         plt.show()
+    print(end_test_accuracy)
     return [1 - x for x in end_test_accuracy]
 
 
@@ -245,7 +246,7 @@ if __name__ == "__main__":
 
             for i in range(10):  # Run each case 5 times
                 fig, ax = plt.subplots(figsize=(10, 7))
-                result = main(args, ax)[150:250]
+                result = main(args, ax)[30:50]
                 print(
                     result
                 )  # Assuming main() returns a list, and you're interested in elements 10 to 20
@@ -263,9 +264,12 @@ if __name__ == "__main__":
         for ax, (means, std_devs), color, alpha, share_value in zip(
             axes, all_case_results, colors, alpha_values, share_values
         ):
-            iterations = range(len(means))
+            iterations = np.arange(len(means)) * 5
             ax.plot(
-                iterations, means, label=f"Mean Train Share {share_value}", color=color
+                iterations,
+                means,
+                label=f"Mean Train Share {share_value}",
+                color=color,
             )
             ax.fill_between(
                 iterations,
@@ -275,7 +279,7 @@ if __name__ == "__main__":
                 alpha=alpha,
                 label=f"Mean ± STD Train Share {share_value}",
             )
-            ax.set_xlabel("PCA dimensions")
+            ax.set_xlabel("Number of features")
             ax.set_ylabel("Test Error")
             ax.set_title(f"Train Share {share_value}")
             ax.legend()
