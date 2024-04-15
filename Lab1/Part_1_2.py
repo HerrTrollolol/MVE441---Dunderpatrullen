@@ -99,7 +99,7 @@ def main(args, ax):
         if i % 10 == 1:
             print(i)
 
-        kf = KFold(n_splits=k_f, shuffle=False, random_state=69)  # nice
+        kf = KFold(n_splits=k_f, shuffle=False)  # nice
         knn = KNeighborsClassifier(n_neighbors=k_n)
 
         for train_index, valid_index in kf.split(X):
