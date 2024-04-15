@@ -138,7 +138,8 @@ def main(args, ax):
     )
     ax.plot(x_axis, [1 - x for x in end_accuracy], label="Valid")
     ax.plot(x_axis, [1 - x for x in end_train_accuracy], label="Train")
-    ax.plot(x_axis, [1 - x for x in end_test_accuracy], label="Test")
+    # ax.plot(x_axis, [1 - x for x in end_test_accuracy], label="Test")
+    """
     ax.plot(
         x_axis,
         [1 - end_test_accuracy[np.argmax(end_accuracy)]] * len(x_axis),
@@ -147,6 +148,7 @@ def main(args, ax):
         color="black",
         label="Best model",
     )
+    """
     ax.set_ylabel("Error")
     ax.set_xlabel("Dimension")
     ax.set_yscale("log")
@@ -187,7 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--imbalance", action="store_true", default=False)
     args = parser.parse_args()
     if args.plot_all:
-        y_limits = (10**-4, 1)
+        y_limits = (10**-3, 1)
         fig, axs = plt.subplots(2, 2, figsize=(10, 10))
 
         axs_flat = axs.flatten()
@@ -206,7 +208,7 @@ if __name__ == "__main__":
         axs_flat = axs.flatten()
 
         # Set y-axis limits
-        y_limits = (10**-4, 1)
+        y_limits = (10**-3, 1)
 
         # Iterate through each combination of elements from list1 and list2
         i = 0  # Index to access flattened axes
@@ -220,7 +222,7 @@ if __name__ == "__main__":
                 main(args, ax)  # Call your main plotting function
                 ax.set_ylim(y_limits)
                 ax.set_title(
-                    f"Combination: {elem1}, {elem2}"
+                    f"neighbours: {elem1}, train share: {elem2}"
                 )  # Optional: set title for subplot
                 i += 1  # Move to the next subplot
 
@@ -240,11 +242,12 @@ if __name__ == "__main__":
 
         all_case_results = []
 
+        # Prepare results for each share value
         for index, share_value in enumerate(share_values):
             args.train_share = share_value  # Modify args accordingly if necessary
             test_result = []
 
-            for i in range(5):  # Run each case 2 times
+            for i in range(10):  # Run each case 5 times
                 fig, ax = plt.subplots(figsize=(10, 7))
                 result = main(args, ax)[
                     10:20
@@ -257,15 +260,13 @@ if __name__ == "__main__":
             std_devs = np.std(all_results_array, axis=0)
             all_case_results.append((means, std_devs))
 
-        # Plotting all cases on the same plot
-        fig, ax = plt.subplots(figsize=(10, 7))
-        iterations = range(
-            len(all_case_results[0][0])
-        )  # Assuming the length of means corresponds to the number of iterations
+        # Create a figure and a set of subplots
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)  # 1 row, 3 columns
 
-        for (means, std_devs), color, alpha, share_value in zip(
-            all_case_results, colors, alpha_values, share_values
+        for ax, (means, std_devs), color, alpha, share_value in zip(
+            axes, all_case_results, colors, alpha_values, share_values
         ):
+            iterations = range(len(means))
             ax.plot(
                 iterations, means, label=f"Mean Train Share {share_value}", color=color
             )
@@ -277,13 +278,16 @@ if __name__ == "__main__":
                 alpha=alpha,
                 label=f"Mean ± STD Train Share {share_value}",
             )
+            ax.set_xlabel("PCA dimensions")
+            ax.set_ylabel("Test Error")
+            ax.set_title(f"Train Share {share_value}")
+            ax.legend()
 
-        ax.set_xlabel("Iteration")
-        ax.set_ylabel("Result")
-        ax.set_title("Mean and Standard Deviation of Results Over Multiple Runs")
-        ax.legend()
+        plt.suptitle("Mean and Standard Deviation of Test error")
+        plt.tight_layout(
+            rect=[0, 0.03, 1, 0.95]
+        )  # Adjust the layout to make room for the global title
         plt.show()
-
     else:
         y_limits = (10**-4, 1)
         fig, ax = plt.subplots(figsize=(10, 7))
