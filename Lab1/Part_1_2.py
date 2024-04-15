@@ -245,9 +245,10 @@ if __name__ == "__main__":
 
             for i in range(10):  # Run each case 5 times
                 fig, ax = plt.subplots(figsize=(10, 7))
-                result = main(args, ax)[
-                    150:250
-                ]  # Assuming main() returns a list, and you're interested in elements 10 to 20
+                result = main(args, ax)[150:250]
+                print(
+                    result
+                )  # Assuming main() returns a list, and you're interested in elements 10 to 20
                 test_result.append(result)
                 plt.close(fig)
 
