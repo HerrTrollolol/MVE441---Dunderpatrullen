@@ -138,8 +138,8 @@ def main(args, ax):
     )
     ax.plot(x_axis, [1 - x for x in end_accuracy], label="Valid")
     ax.plot(x_axis, [1 - x for x in end_train_accuracy], label="Train")
-    # ax.plot(x_axis, [1 - x for x in end_test_accuracy], label="Test")
-    """
+    ax.plot(x_axis, [1 - x for x in end_test_accuracy], label="Test")
+
     ax.plot(
         x_axis,
         [1 - end_test_accuracy[np.argmax(end_accuracy)]] * len(x_axis),
@@ -148,7 +148,7 @@ def main(args, ax):
         color="black",
         label="Best model",
     )
-    """
+
     ax.set_ylabel("Error")
     ax.set_xlabel("Dimension")
     ax.set_yscale("log")
