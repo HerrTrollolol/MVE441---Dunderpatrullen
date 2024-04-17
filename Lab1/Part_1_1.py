@@ -1,35 +1,28 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import KNeighborsClassifier
-from numpy.linalg import svd
-from sklearn.model_selection import KFold
 import argparse
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
 from imblearn.over_sampling import SMOTE, RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
-import seaborn as sns
+from numpy.linalg import svd
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import KFold
 from sklearn.metrics import confusion_matrix
 
 
 def sampling(TCGAdata, TCGAlabels, sampling_type):
-    TCGAdata_resampled, TCGAlabels_resampled = TCGAdata, TCGAlabels
+    TCGAdata_resampled, TCGAlabels_resampled, sampler = TCGAdata, TCGAlabels, False
+    
     if sampling_type == "SMOTE":
-        smote = SMOTE()
-
-        TCGAdata_resampled, TCGAlabels_resampled = smote.fit_resample(
-            TCGAdata, TCGAlabels
-        )
+        sampler = SMOTE()
     elif sampling_type == "OVER":
-        ros = RandomOverSampler()
-
-        TCGAdata_resampled, TCGAlabels_resampled = ros.fit_resample(
-            TCGAdata, TCGAlabels
-        )
-
+        sampler = RandomOverSampler()
     elif sampling_type == "UNDER":
-        rus = RandomUnderSampler()
+        sampler = RandomUnderSampler()
 
-        TCGAdata_resampled, TCGAlabels_resampled = rus.fit_resample(
+    if sampler != False:
+        TCGAdata_resampled, TCGAlabels_resampled = sampler.fit_resample(
             TCGAdata, TCGAlabels
         )
 
@@ -38,19 +31,18 @@ def sampling(TCGAdata, TCGAlabels, sampling_type):
 
 def imbalance(TCGAdata, TCGAlabels):
     # orignial data (172,1215,266,571,606,57)
-    sampling_strategy = {
-        '"GBM"': 50,
-        '"BC"': 1200,
-        '"OV"': 50,
-        '"LU"': 50,
-        '"KI"': 50,
-        '"U"': 50,
+    sampling_split = {
+        '"GBM"': 30,
+        '"BC"': 1215,
+        '"OV"': 30,
+        '"LU"': 571,
+        '"KI"': 606,
+        '"U"': 30,
     }
-    # Initialize the RandomUnderSampler with the defined strategy
-    rus = RandomUnderSampler(sampling_strategy=sampling_strategy)
+    
+    sampler = RandomUnderSampler(sampling_strategy=sampling_split)
 
-    # Resample the dataset
-    TCGAdata_resampled, TCGAlabels_resampled = rus.fit_resample(TCGAdata, TCGAlabels)
+    TCGAdata_resampled, TCGAlabels_resampled = sampler.fit_resample(TCGAdata, TCGAlabels)
     return TCGAdata_resampled, TCGAlabels_resampled
 
 
@@ -58,18 +50,19 @@ def main(args, ax):
     TCGAdata = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
     TCGAlabels = np.loadtxt("TCGAlabels", skiprows=1, usecols=1, dtype=str)
 
+    # If true, then imbalances the data based on input
     if args.imbalance:
         TCGAdata, TCGAlabels = imbalance(TCGAdata, TCGAlabels)
 
     TCGAdata, TCGAlabels = sampling(TCGAdata, TCGAlabels, args.sampling_type)
 
-    # Normerar data
+    # Norms the data
     TCGAdata = StandardScaler().fit_transform(TCGAdata)
 
     X_svd = svd(TCGAdata)
-    TCGAdata = TCGAdata @ X_svd[2].T  # Principel component
+    TCGAdata = TCGAdata @ X_svd[2].T  # Makes TCGAdata into principal components
 
-    # Shuffle the combined data
+    # Shuffles the data
     print(f"number of data points: {TCGAlabels.shape[0]}")
     suffle_indecies = np.arange(0, TCGAlabels.shape[0] - 1, 1)
     np.random.shuffle(suffle_indecies)
@@ -83,27 +76,25 @@ def main(args, ax):
     TCGAlabels_train = TCGAlabels[suffle_indecies[:split_indexies]]
     TCGAlabels_test = TCGAlabels[suffle_indecies[split_indexies:]]
 
-    end_accuracy = []
-    end_train_accuracy = []
-    end_test_accuracy = []
+    end_accuracy, end_train_accuracy, end_test_accuracy = [], [], []
     x_axis = []
     best_end_accuracy, best_test_prediction = 0, 0
 
+    # Main loop in which we find the most effective usage of principal components
     for i in range(1, args.max_dim + 1, args.dim_step):
         X = TCGAdata_train[:, :i]
         x_axis.append(i)
-        accuracies = []
-        train_accuracies = []
+        accuracies, train_accuracies = [], []
 
-        k_f = args.folds
-        k_n = args.neighbours
+        k_f, k_n = args.folds, args.neighbours
 
-        if i % 10 == 1:
+        if i % (5*args.dim_step) == 1:
             print(i)
 
-        kf = KFold(n_splits=k_f, shuffle=True, random_state=69)  # nice
+        kf = KFold(n_splits=k_f, shuffle=True) 
         knn = KNeighborsClassifier(n_neighbors=k_n)
 
+        # This loop fits a knn-model for i principal components and saves the accuracy
         for train_index, valid_index in kf.split(X):
             X_train, X_valid = X[train_index], X[valid_index]
             y_train, y_valid = (
@@ -122,16 +113,20 @@ def main(args, ax):
         )
         end_accuracy.append(np.sum(accuracies) / (len(TCGAlabels_train)))
 
+        # Here we try to predict the test_data based on i principal components
         knn.fit(X, TCGAlabels_train)
         prediction_test_data = knn.predict(TCGAdata_test[:, :i])
         test_predictions = np.sum(prediction_test_data == TCGAlabels_test)
         dim_test_accuracy = test_predictions / len(TCGAlabels_test)
         end_test_accuracy.append(dim_test_accuracy)
 
+        # And here we save the prediction-accuracy for TEST-data for the number of 
+        # principal components that achieved the best prediction on the VALID-data
         if end_accuracy[-1] > best_end_accuracy:
             best_end_accuracy = end_accuracy[-1]
             best_test_prediction = prediction_test_data
 
+    # Everything below here until "return-statement" is just plotting
     print(f"test accuracy: {end_test_accuracy[np.argmax(end_accuracy)]}")
     ax.set_title(
         f"Sampling type: {args.sampling_type} - Test error: {round(1-end_test_accuracy[np.argmax(end_accuracy)],3)}"
@@ -188,70 +183,51 @@ if __name__ == "__main__":
     parser.add_argument("--plot_variance", action="store_true", default=False)
     parser.add_argument("--imbalance", action="store_true", default=False)
     args = parser.parse_args()
+    
     if args.plot_all:
         y_limits = (10**-3, 1)
         fig, axs = plt.subplots(2, 2, figsize=(10, 10))
-
         axs_flat = axs.flatten()
 
         for i, ax in enumerate(axs_flat):
             args.sampling_type = alt[i]
-            # Setting the same y-axis limits
             main(args, ax)
             ax.set_ylim(y_limits)
         plt.tight_layout(pad=3.0)
         plt.show()
 
     elif args.plot_all_2:
-        # Create a 3x3 grid for plotting, adjust figsize as needed
         fig, axs = plt.subplots(3, 3, figsize=(15, 15))
         axs_flat = axs.flatten()
-
-        # Set y-axis limits
         y_limits = (10**-3, 1)
 
-        # Iterate through each combination of elements from list1 and list2
-        i = 0  # Index to access flattened axes
+        i = 0  
         for elem1 in ns:
             for elem2 in ss:
                 ax = axs_flat[i]
-                # Assuming you modify args or call main() based on elem1 and elem2
-                # Example modification, replace with actual usage:
                 args.neighbours = elem1
                 args.train_share = elem2
-                main(args, ax)  # Call your main plotting function
+                main(args, ax)  
                 ax.set_ylim(y_limits)
-                ax.set_title(
-                    f"neighbours: {elem1}, train share: {elem2}"
-                )  # Optional: set title for subplot
-                i += 1  # Move to the next subplot
+                ax.set_title(f"neighbours: {elem1}, train share: {elem2}")  
+                i += 1  
 
-        # Ensure there's no overlap in the layout
         plt.tight_layout(pad=6.0)
-
-        # Display the plot
         plt.show()
+        
     elif args.plot_variance:
         colors = ["blue", "green", "red"]
-        share_values = [
-            0.5,
-            0.7,
-            0.9,
-        ]  # Different share values for training or other uses
-        alpha_values = [0.2, 0.4, 0.6]  # Different alpha values for visibility
-
+        share_values = [0.5, 0.7, 0.9]  
+        alpha_values = [0.2, 0.4, 0.6]  
         all_case_results = []
 
-        # Prepare results for each share value
         for index, share_value in enumerate(share_values):
-            args.train_share = share_value  # Modify args accordingly if necessary
+            args.train_share = share_value  
             test_result = []
 
-            for i in range(10):  # Run each case 5 times
+            for i in range(10):
                 fig, ax = plt.subplots(figsize=(10, 7))
-                result = main(args, ax)[
-                    10:20
-                ]  # Assuming main() returns a list, and you're interested in elements 10 to 20
+                result = main(args, ax)[10:20]  # Works as intended if max_dim/dim_step > 20. 
                 test_result.append(result)
                 plt.close(fig)
 
@@ -260,8 +236,7 @@ if __name__ == "__main__":
             std_devs = np.std(all_results_array, axis=0)
             all_case_results.append((means, std_devs))
 
-        # Create a figure and a set of subplots
-        fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)  # 1 row, 3 columns
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)  
 
         for ax, (means, std_devs), color, alpha, share_value in zip(
             axes, all_case_results, colors, alpha_values, share_values
@@ -286,13 +261,10 @@ if __name__ == "__main__":
         plt.suptitle("Mean and Standard Deviation of Test error")
         plt.tight_layout(
             rect=[0, 0.03, 1, 0.95]
-        )  # Adjust the layout to make room for the global title
+        )  
         plt.show()
+        
     else:
         y_limits = (10**-4, 1)
         fig, ax = plt.subplots(figsize=(10, 7))
         main(args, ax)
-        ax.set_ylim(y_limits)
-        plt.tight_layout(pad=3.0)
-        plt.title("VAD I HELVETE")
-        plt.show()
