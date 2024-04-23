@@ -244,7 +244,7 @@ if __name__ == "__main__":
             args.train_share = share_value  # Modify args accordingly if necessary
             test_result = []
 
-            for i in range(10):  # Run each case 5 times
+            for i in range(20):  # Run each case 5 times
                 fig, ax = plt.subplots(figsize=(10, 7))
                 result = main(args, ax)[30:50]
                 print(
@@ -264,7 +264,7 @@ if __name__ == "__main__":
         for ax, (means, std_devs), color, alpha, share_value in zip(
             axes, all_case_results, colors, alpha_values, share_values
         ):
-            iterations = np.arange(len(means)) * 5
+            iterations = np.arange(len(means)) * 5 + 150
             ax.plot(
                 iterations,
                 means,
