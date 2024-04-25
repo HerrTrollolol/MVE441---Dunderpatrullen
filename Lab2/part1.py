@@ -6,12 +6,13 @@ from sklearn.model_selection import train_test_split
 import argparse
 import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn.utils import shuffle
 
 
 def RF(args):
     if args.data_set != "Cancer":
-        TCGAdata = pd.read_csv("CATSnDOGS.csv", header=True, dtype=int).values
-        TCGAlabels = pd.read_csv("Labels.csv", header=True, dtype=int).values
+        TCGAdata = np.loadtxt("CATSnDOGS.csv", delimiter=",", skiprows=1)
+        TCGAlabels = np.loadtxt("Labels.csv", delimiter=",", skiprows=1)
 
     else:
         TCGAdata = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
@@ -24,20 +25,63 @@ def RF(args):
 
     TCGAdata = StandardScaler().fit_transform(TCGAdata)
 
-    TCGA_train, TCGA_test, TCGAlabels_train, TCGAlabels_test = train_test_split(
-        TCGAdata, TCGAlabels, test_size=0.25
-    )
+    # if args.data_set != "Cancer":
+    #     X_svd = svd(TCGAdata)
+    #     TCGAdata = TCGAdata @ X_svd[2].T  # Makes TCGAdata into principal components
 
-    classifier = RandomForestClassifier(
-        n_estimators=1000,
-        criterion="gini",
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        max_features="sqrt",
-        bootstrap=True,
-        max_samples=0.7,
+    TCGA_train, TCGA_test, TCGAlabels_train, TCGAlabels_test = train_test_split(
+        TCGAdata, TCGAlabels, test_size=0.3
     )
+    if args.augmentation:
+        augmented_TCGAdata = TCGA_train
+        augmented_TCGAlabels = TCGAlabels_train
+        for i in range(1, 11):
+            augmented_TCGAdata = np.concatenate(
+                (augmented_TCGAdata, add_noise(TCGA_train, i / 10))
+            )
+            augmented_TCGAlabels = np.concatenate(
+                (augmented_TCGAlabels, TCGAlabels_train)
+            )
+
+        augmented_TCGAdata = np.concatenate(
+            (augmented_TCGAdata, flip_data(augmented_TCGAdata))
+        )
+        augmented_TCGAlabels = np.concatenate(
+            (augmented_TCGAlabels, augmented_TCGAlabels)
+        )
+
+        augmented_TCGAdata = np.concatenate(
+            (augmented_TCGAdata, add_black_pixels(augmented_TCGAdata))
+        )
+        augmented_TCGAlabels = np.concatenate(
+            (augmented_TCGAlabels, augmented_TCGAlabels)
+        )
+
+        TCGA_train, TCGAlabels_train = augmented_TCGAdata, augmented_TCGAlabels
+
+    if args.data_set == "Cancer":
+        classifier = RandomForestClassifier(
+            n_estimators=1000,
+            criterion="gini",
+            max_depth=None,
+            min_samples_split=2,
+            min_samples_leaf=1,
+            max_features="sqrt",
+            bootstrap=True,
+            max_samples=0.7,
+        )
+
+    else:
+        classifier = RandomForestClassifier(
+            n_estimators=100,
+            criterion="gini",
+            max_depth=None,
+            min_samples_split=2,
+            min_samples_leaf=1,
+            max_features="sqrt",
+            bootstrap=True,
+            max_samples=0.7,
+        )
 
     classifier.fit(TCGA_train, TCGAlabels_train)
     final_test_score = np.sum(classifier.predict(TCGA_test) == TCGAlabels_test) / len(
@@ -52,8 +96,8 @@ def RF(args):
 
 def GBM(args):
     if args.data_set != "Cancer":
-        TCGAdata = pd.read_csv("CATSnDOGS.csv", header=True, dtype=int).values
-        TCGAlabels = pd.read_csv("Labels.csv", header=True, dtype=int).values
+        TCGAdata = np.loadtxt("CATSnDOGS.csv", delimiter=",", skiprows=1)
+        TCGAlabels = np.loadtxt("Labels.csv", delimiter=",", skiprows=1)
 
     else:
         TCGAdata = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
@@ -68,15 +112,54 @@ def GBM(args):
         TCGAdata, TCGAlabels, test_size=0.25
     )
 
-    classifier = GradientBoostingClassifier(
-        loss="log_loss",  # Specifies the loss function to be used as logarithmic loss
-        learning_rate=0.8,  # Controls the contribution of each tree in the ensemble
-        n_estimators=1000,  # Number of boosting stages or trees to be built
-        max_features="sqrt",
-        subsample=1.0,  # Fraction of samples used for fitting the individual base learners
-        min_samples_split=2,  # Minimum number of samples required to split an internal node
-        max_depth=3,  # Maximum depth of the individual decision trees
-    )
+    if args.augmentation:
+        augmented_TCGAdata = TCGA_train
+        augmented_TCGAlabels = TCGAlabels_train
+        for i in range(1, 11):
+            augmented_TCGAdata = np.concatenate(
+                (augmented_TCGAdata, add_noise(TCGA_train, i / 10))
+            )
+            augmented_TCGAlabels = np.concatenate(
+                (augmented_TCGAlabels, TCGAlabels_train)
+            )
+
+        augmented_TCGAdata = np.concatenate(
+            (augmented_TCGAdata, flip_data(augmented_TCGAdata))
+        )
+        augmented_TCGAlabels = np.concatenate(
+            (augmented_TCGAlabels, augmented_TCGAlabels)
+        )
+
+        augmented_TCGAdata = np.concatenate(
+            (augmented_TCGAdata, add_black_pixels(augmented_TCGAdata))
+        )
+        augmented_TCGAlabels = np.concatenate(
+            (augmented_TCGAlabels, augmented_TCGAlabels)
+        )
+
+        TCGA_train, TCGAlabels_train = augmented_TCGAdata, augmented_TCGAlabels
+
+    if args.data_set == "Cancer":  # This classifier is for the Cancer data_set
+        classifier = GradientBoostingClassifier(
+            loss="log_loss",
+            learning_rate=0.8,
+            n_estimators=1000,
+            max_features="sqrt",
+            subsample=1.0,
+            min_samples_split=2,
+            max_depth=3,
+        )
+
+    else:  # This classifier is for the cats_and_dogs data_set
+        classifier = GradientBoostingClassifier(
+            loss="log_loss",
+            learning_rate=0.8,
+            n_estimators=100,
+            max_features="sqrt",
+            subsample=1.0,
+            min_samples_split=2,
+            max_depth=4,
+        )
 
     classifier.fit(TCGA_train, TCGAlabels_train)
     final_test_score = np.sum(classifier.predict(TCGA_test) == TCGAlabels_test) / len(
@@ -88,6 +171,35 @@ def GBM(args):
     return (final_train_score, final_test_score, classifier.feature_importances_)
 
 
+def add_noise(data, noise_factor=0.1):
+    noise = np.random.normal(scale=noise_factor, size=data.shape)
+    augmented_data = data + noise
+    return augmented_data
+
+
+def scale_data(data, scale_factor=0.1):
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(data) * np.random.uniform(
+        low=1 - scale_factor, high=1 + scale_factor, size=data.shape
+    )
+    return scaled_data
+
+
+def flip_data(data, axis=0):
+    flipped_data = np.flip(data, axis=axis)
+    return flipped_data
+
+
+def add_black_pixels(data, percent_pixels=0.05):
+    augmented_data = np.copy(data)
+
+    num_pixels = int(np.ceil(data.size * percent_pixels))
+    random_indices = np.random.choice(data.size, size=num_pixels, replace=False)
+    augmented_data.flat[random_indices] = 0
+
+    return augmented_data
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--noice", type=int, default=0)
@@ -96,7 +208,10 @@ if __name__ == "__main__":
     parser.add_argument("--classifier", type=str, default="RF")
     parser.add_argument("--plot_noice", action="store_true", default=False)
     parser.add_argument("--plot_features", action="store_true", default=False)
+    parser.add_argument("--augmentation", action="store_true", default=False)
     parser.add_argument("--data_set", type=str, default="Cancer")
+    parser.add_argument("--plot_feature_noice", action="store_true", default=False)
+
     args = parser.parse_args()
 
     if args.plot_noice:
@@ -213,6 +328,66 @@ if __name__ == "__main__":
             label="RF",
             color="b",
         )
+        plt.show()
+
+    elif args.plot_feature_noice:
+        noice = [0, 2]
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 8))
+        fig.suptitle("Feature Importance by Model with Increasing Noise")
+
+        for i in noice:
+            print(i / len(noice))
+            args.noice = i
+
+            _, _, feature_importance_RF = RF(args)
+            print("hi")
+            _, _, feature_importance_GBM = GBM(args)
+            print("då")
+
+            base_color_intensity = 0  # Starting intensity for no noise (0 would be white, 1 would be full color)
+            intensity_step = 0.15
+            # Calculate current intensity level
+            current_intensity = base_color_intensity + i * intensity_step
+
+            # Define colors
+            darker_red = (
+                1,
+                current_intensity,
+                current_intensity,
+            )  # Keep red constant, decrease green and blue slightly
+            darker_blue = (
+                current_intensity,
+                current_intensity,
+                1,
+            )  # Keep blue constant, decrease red and green slightly
+
+            # Plot
+            axes[0].plot(
+                np.sort(feature_importance_GBM)[::-1],
+                label=f"GBM Noise={i}",
+                color=darker_red,
+            )
+            axes[1].plot(
+                np.sort(feature_importance_RF)[::-1],
+                label=f"RF Noise={i}",
+                color=darker_blue,
+            )
+
+            # Final plot adjustments
+        # Adding labels and legend
+        axes[0].set_title("GBM")
+        axes[0].set_ylabel("Importance")
+        axes[0].legend()
+
+        axes[1].set_title("RF")
+        axes[1].set_xlabel("Features")
+        axes[1].set_ylabel("Importance")
+        axes[1].legend()
+
+        # Show plot
+        plt.tight_layout(
+            rect=[0, 0, 1, 0.96]
+        )  # Adjust layout to make room for the main title
         plt.show()
 
     else:
