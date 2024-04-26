@@ -7,6 +7,69 @@ import argparse
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.utils import shuffle
+import seaborn as sns
+import os
+
+
+def RF_break(mode):
+    depth_range = range(1, 21, 1)
+    tree_range = range(1, 21, 1)
+    if mode == "create":
+        TCGAdata = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
+        TCGAlabels = np.loadtxt("TCGAlabels", skiprows=1, usecols=1, dtype=str)
+
+        TCGAdata = StandardScaler().fit_transform(TCGAdata)
+
+        TCGA_train, TCGA_test, TCGAlabels_train, TCGAlabels_test = train_test_split(
+            TCGAdata, TCGAlabels, test_size=0.3
+        )
+        # This classifier is for the Cancer data_set
+        result = np.zeros((len(list(depth_range)), len(list(tree_range))))
+        i, j = 0, 0
+        for depth in depth_range:
+            j = 0
+            for n_trees in tree_range:
+                print(depth, n_trees)
+                classifier = RandomForestClassifier(
+                    n_estimators=n_trees,
+                    criterion="gini",
+                    max_depth=depth,
+                    min_samples_split=2,
+                    min_samples_leaf=1,
+                    max_features="sqrt",
+                    bootstrap=True,
+                    max_samples=0.7,
+                )
+                # n_estimators=1000,
+                # criterion="gini",
+                # max_depth=1000,
+                # min_samples_split=2,
+                # min_samples_leaf=1,
+                # max_features="sqrt",
+                # bootstrap=True,
+                # max_samples=0.7,
+                classifier.fit(TCGA_train, TCGAlabels_train)
+                final_test_score = np.sum(
+                    classifier.predict(TCGA_test) == TCGAlabels_test
+                ) / len(TCGA_test)
+                result[i][j] = final_test_score
+                j += 1
+            i += 1
+
+        file_path = os.path.join("data", "break_method_combination.npy")
+        np.save(file_path, result)
+
+    elif mode == "plot":
+        result = np.load("data/break_method_combination.npy")
+        sns.heatmap(
+            result,
+            xticklabels=list(tree_range),
+            yticklabels=(np.array(list(depth_range))),
+        )
+        plt.yticks(rotation=0)
+        plt.ylabel("Depth")
+        plt.xlabel("n_estimators")
+        plt.show()
 
 
 def RF(args):
@@ -87,6 +150,7 @@ def RF(args):
     final_test_score = np.sum(classifier.predict(TCGA_test) == TCGAlabels_test) / len(
         TCGA_test
     )
+
     final_train_score = np.sum(
         classifier.predict(TCGA_train) == TCGAlabels_train
     ) / len(TCGA_train)
@@ -206,11 +270,14 @@ if __name__ == "__main__":
     parser.add_argument("--noice_iteration_max", type=int, default=15)
     parser.add_argument("--noice_iteration_jump", type=int, default=1)
     parser.add_argument("--classifier", type=str, default="RF")
+    parser.add_argument("--data_set", type=str, default="Cancer")
     parser.add_argument("--plot_noice", action="store_true", default=False)
     parser.add_argument("--plot_features", action="store_true", default=False)
     parser.add_argument("--augmentation", action="store_true", default=False)
-    parser.add_argument("--data_set", type=str, default="Cancer")
     parser.add_argument("--plot_feature_noice", action="store_true", default=False)
+    parser.add_argument("--break_method", action="store_true", default=False)
+    parser.add_argument("--plot_break", action="store_true", default=False)
+    parser.add_argument("--create_break", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -389,6 +456,11 @@ if __name__ == "__main__":
             rect=[0, 0, 1, 0.96]
         )  # Adjust layout to make room for the main title
         plt.show()
+    elif args.break_method:
+        if args.create_break:
+            RF_break("create")
+        if args.plot_break:
+            RF_break("plot")
 
     else:
         if args.classifier == "RF":
