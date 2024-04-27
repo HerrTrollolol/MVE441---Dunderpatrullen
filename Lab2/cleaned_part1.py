@@ -11,6 +11,13 @@ import seaborn as sns
 import os
 
 
+# cleaned betyder: 
+
+    # bytt namn till data istället för TCGA_data.
+    # gjort en funktion av augmentation.
+    # lagt till en funktion som plottar mislabeled images. obeservation att viss data 
+    # redan är mislabeled.
+
 def RF_break(mode):
     depth_range = range(1, 21, 1)
     tree_range = range(1, 21, 1)
@@ -95,30 +102,9 @@ def RF(args):
     data_train, data_test, data_labels_train, data_labels_test = train_test_split(
         data, data_labels, test_size=0.3
     )
+
     if args.augmentation:
-        augmented_data = data_train
-        augmented_data_labels = data_labels_train
-        for i in range(1, 11):
-            augmented_data = np.concatenate(
-                (augmented_data, add_noise(data_train, i / 10))
-            )
-            augmented_data_labels = np.concatenate(
-                (augmented_data_labels, data_labels_train)
-            )
-
-        augmented_data = np.concatenate((augmented_data, flip_data(augmented_data)))
-        augmented_data_labels = np.concatenate(
-            (augmented_data_labels, augmented_data_labels)
-        )
-
-        augmented_data = np.concatenate(
-            (augmented_data, add_black_pixels(augmented_data))
-        )
-        augmented_data_labels = np.concatenate(
-            (augmented_data_labels, augmented_data_labels)
-        )
-
-        data_train, data_labels_train = augmented_data, augmented_data_labels
+        data_train, data_labels_train = augment_data(data_train, data_labels_train)
 
     if args.data_set == "Cancer":
         classifier = RandomForestClassifier(
@@ -132,7 +118,7 @@ def RF(args):
             max_samples=0.7,
         )
 
-    else:
+    else: #CatsNDogs
         classifier = RandomForestClassifier(
             n_estimators=100,
             criterion="gini",
@@ -148,13 +134,16 @@ def RF(args):
     final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
         data_test
     )
-
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    return (final_train_score, final_test_score, classifier.feature_importances_)
+    # plots the mislabeld images.
+    if args.plot_mislabeled:
+        plot_misclassified_images(classifier,data_test,data_labels_test)
+    
 
+    return (final_train_score, final_test_score, classifier.feature_importances_)
 
 def GBM(args):
     if args.data_set != "Cancer":
@@ -175,29 +164,8 @@ def GBM(args):
     )
 
     if args.augmentation:
-        augmented_data = data_train
-        augmented_data_labels = data_labels_train
-        for i in range(1, 11):
-            augmented_data = np.concatenate(
-                (augmented_data, add_noise(data_train, i / 10))
-            )
-            augmented_data_labels = np.concatenate(
-                (augmented_data_labels, data_labels_train)
-            )
+        data_train, data_labels_train = augment_data(data_train, data_labels_train)
 
-        augmented_data = np.concatenate((augmented_data, flip_data(augmented_data)))
-        augmented_data_labels = np.concatenate(
-            (augmented_data_labels, augmented_data_labels)
-        )
-
-        augmented_data = np.concatenate(
-            (augmented_data, add_black_pixels(augmented_data))
-        )
-        augmented_data_labels = np.concatenate(
-            (augmented_data_labels, augmented_data_labels)
-        )
-
-        data_train, data_labels_train = augmented_data, augmented_data_labels
 
     if args.data_set == "Cancer":  # This classifier is for the Cancer data_set
         classifier = GradientBoostingClassifier(
@@ -228,14 +196,43 @@ def GBM(args):
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
-    return (final_train_score, final_test_score, classifier.feature_importances_)
 
+    if args.plot_mislabeled:
+        plot_misclassified_images(classifier,data_test,data_labels_test)
+    
+    return (final_train_score, final_test_score, classifier.feature_importances_)
 
 def add_noise(data, noise_factor=0.1):
     noise = np.random.normal(scale=noise_factor, size=data.shape)
     augmented_data = data + noise
     return augmented_data
 
+def augment_data(data_train, data_labels_train):
+    augmented_data = data_train
+    augmented_data_labels = data_labels_train
+    for i in range(1, 11):
+        augmented_data = np.concatenate(
+            (augmented_data, add_noise(data_train, i / 10))
+        )
+        augmented_data_labels = np.concatenate(
+            (augmented_data_labels, data_labels_train)
+        )
+
+    augmented_data = np.concatenate((augmented_data, flip_data(augmented_data)))
+    augmented_data_labels = np.concatenate(
+        (augmented_data_labels, augmented_data_labels)
+    )
+
+    augmented_data = np.concatenate(
+        (augmented_data, add_black_pixels(augmented_data))
+    )
+    augmented_data_labels = np.concatenate(
+        (augmented_data_labels, augmented_data_labels)
+    )
+
+    data_train, data_labels_train = augmented_data, augmented_data_labels
+
+    return augmented_data, augmented_data_labels
 
 def scale_data(data, scale_factor=0.1):
     scaler = StandardScaler()
@@ -244,11 +241,9 @@ def scale_data(data, scale_factor=0.1):
     )
     return scaled_data
 
-
 def flip_data(data, axis=0):
     flipped_data = np.flip(data, axis=axis)
     return flipped_data
-
 
 def add_black_pixels(data, percent_pixels=0.05):
     augmented_data = np.copy(data)
@@ -259,6 +254,30 @@ def add_black_pixels(data, percent_pixels=0.05):
 
     return augmented_data
 
+def plot_misclassified_images(classifier, data_test, data_labels_test):
+    predictions_test = classifier.predict(data_test)
+    misclassified_indices = np.where(predictions_test != data_labels_test)[0]
+
+    # Plot misclassified images
+    for idx in misclassified_indices:
+        predicted_label = predictions_test[idx]
+        actual_label = data_labels_test[idx] 
+
+        image_shape = (64, 64)
+        misclassified_image = data_test[idx].reshape(image_shape)
+
+        if predicted_label == 0:
+            predicted_label = "Cat"
+        else: 
+            predicted_label = "Dog"
+        if actual_label == 0:
+            actual_label = "Cat"
+        else: 
+            actual_label = "Dog"
+        # Show the misclassified image
+        plt.imshow(misclassified_image, cmap='gray')
+        plt.title(f"Predicted: {predicted_label}, Actual: {actual_label}")
+        plt.show()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -274,6 +293,7 @@ if __name__ == "__main__":
     parser.add_argument("--break_method", action="store_true", default=False)
     parser.add_argument("--plot_break", action="store_true", default=False)
     parser.add_argument("--create_break", action="store_true", default=False)
+    parser.add_argument("--plot_mislabeled", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -394,7 +414,7 @@ if __name__ == "__main__":
         plt.show()
 
     elif args.plot_feature_noice:
-        noice = [0, 2]
+        noice = [0, 4]
         fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 8))
         fig.suptitle("Feature Importance by Model with Increasing Noise")
 
