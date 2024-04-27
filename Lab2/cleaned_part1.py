@@ -10,13 +10,12 @@ from sklearn.utils import shuffle
 import seaborn as sns
 import os
 
-
 # cleaned betyder: 
 
     # bytt namn till data istället för TCGA_data.
-    # gjort en funktion av augmentation.
-    # lagt till en funktion som plottar mislabeled images. obeservation att viss data 
-    # redan är mislabeled.
+    # gjort en funktion av hela augmentation-delen.
+    # lagt till en funktion som plottar mislabeled images. obeservation att viss data redan är mislabeled.
+    # flyttat TCGAdata/ labels och CATSnDOGS /labels till en folder som heter data 
 
 def RF_break(mode):
     depth_range = range(1, 21, 1)
@@ -78,15 +77,16 @@ def RF_break(mode):
         plt.xlabel("n_estimators")
         plt.show()
 
-
 def RF(args):
     if args.data_set != "Cancer":
-        data = np.loadtxt("CATSnDOGS.csv", delimiter=",", skiprows=1)
-        data_labels = np.loadtxt("Labels.csv", delimiter=",", skiprows=1)
+        
+        print(os.getcwd())
+        data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+        data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
     else:
-        data = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
-        data_labels = np.loadtxt("TCGAlabels", skiprows=1, usecols=1, dtype=str)
+        data = np.loadtxt("data/TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
+        data_labels = np.loadtxt("data/TCGAlabels", skiprows=1, usecols=1, dtype=str)
 
     if args.noice != 0:
         data = data + np.random.normal(
@@ -147,12 +147,12 @@ def RF(args):
 
 def GBM(args):
     if args.data_set != "Cancer":
-        data = np.loadtxt("CATSnDOGS.csv", delimiter=",", skiprows=1)
-        data_labels = np.loadtxt("Labels.csv", delimiter=",", skiprows=1)
+        data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+        data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
     else:
-        data = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
-        data_labels = np.loadtxt("TCGAlabels", skiprows=1, usecols=1, dtype=str)
+        data = np.loadtxt("data/TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
+        data_labels = np.loadtxt("data/TCGAlabels", skiprows=1, usecols=1, dtype=str)
 
     if args.noice != 0:
         data = data + np.random.normal(0, args.noice, data.shape)
