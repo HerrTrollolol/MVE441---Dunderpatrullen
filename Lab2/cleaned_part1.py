@@ -10,6 +10,8 @@ from sklearn.utils import shuffle
 import seaborn as sns
 import os
 
+
+
 # cleaned betyder: 
 
     # bytt namn till data istället för TCGA_data.
