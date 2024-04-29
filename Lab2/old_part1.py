@@ -415,6 +415,9 @@ if __name__ == "__main__":
 
         # Plotting
         plt.figure(figsize=(10, 6))  # Optional: Adjust figure size
+
+        # Subplot for RF
+        plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
         plt.bar(
             num_features,
             sorted_feature_importance_RF,
@@ -434,13 +437,13 @@ if __name__ == "__main__":
         # Adding labels and title
         plt.xlabel("Feature Index")
         plt.ylabel("Importance")
-        plt.title("Sorted and Filtered Feature Importance Summed with Contributions")
+        plt.title("Feature Importance")
 
         # Adding legend
         plt.legend()
+        plt.subplot(1, 2, 2)
 
         # Show plot
-        plt.show()
         plt.plot(
             np.sort(feature_importance_GBM)[::-1],
             label="GBM",
@@ -451,6 +454,7 @@ if __name__ == "__main__":
             label="RF",
             color="b",
         )
+        plt.legend()
         plt.show()
 
     elif args.plot_feature_noice:
