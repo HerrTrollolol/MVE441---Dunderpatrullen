@@ -74,12 +74,12 @@ def RF_break(mode):
 
 def RF(args):
     if args.data_set != "Cancer":
-        TCGAdata = np.loadtxt("CATSnDOGS.csv", delimiter=",", skiprows=1)
-        TCGAlabels = np.loadtxt("Labels.csv", delimiter=",", skiprows=1)
+        TCGAdata = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+        TCGAlabels = np.loadtxt("data/CorrectLabels.csv", delimiter=",", skiprows=1)
 
     else:
-        TCGAdata = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
-        TCGAlabels = np.loadtxt("TCGAlabels", skiprows=1, usecols=1, dtype=str)
+        TCGAdata = np.loadtxt("data/TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
+        TCGAlabels = np.loadtxt("data/TCGAlabels", skiprows=1, usecols=1, dtype=str)
 
     if args.noice != 0:
         TCGAdata = TCGAdata + np.random.normal(
@@ -93,7 +93,7 @@ def RF(args):
     #     TCGAdata = TCGAdata @ X_svd[2].T  # Makes TCGAdata into principal components
 
     TCGA_train, TCGA_test, TCGAlabels_train, TCGAlabels_test = train_test_split(
-        TCGAdata, TCGAlabels, test_size=0.3
+        TCGAdata, TCGAlabels, test_size=0.2
     )
     if args.augmentation:
         augmented_TCGAdata = TCGA_train
@@ -160,12 +160,12 @@ def RF(args):
 
 def GBM(args):
     if args.data_set != "Cancer":
-        TCGAdata = np.loadtxt("CATSnDOGS.csv", delimiter=",", skiprows=1)
-        TCGAlabels = np.loadtxt("Labels.csv", delimiter=",", skiprows=1)
+        TCGAdata = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+        TCGAlabels = np.loadtxt("data/CorrectLabels.csv", delimiter=",", skiprows=1)
 
     else:
-        TCGAdata = np.loadtxt("TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
-        TCGAlabels = np.loadtxt("TCGAlabels", skiprows=1, usecols=1, dtype=str)
+        TCGAdata = np.loadtxt("data/TCGAdata.txt", skiprows=1, usecols=range(1, 2001))
+        TCGAlabels = np.loadtxt("data/TCGAlabels", skiprows=1, usecols=1, dtype=str)
 
     if args.noice != 0:
         TCGAdata = TCGAdata + np.random.normal(0, args.noice, TCGAdata.shape)
@@ -235,13 +235,13 @@ def GBM(args):
     return (final_train_score, final_test_score, classifier.feature_importances_)
 
 
-def add_noise(data, noise_factor=0.1):
+def add_noise(data, noise_factor=1):
     noise = np.random.normal(scale=noise_factor, size=data.shape)
     augmented_data = data + noise
     return augmented_data
 
 
-def scale_data(data, scale_factor=0.1):
+def scale_data(data, scale_factor=1):
     scaler = StandardScaler()
     scaled_data = scaler.fit_transform(data) * np.random.uniform(
         low=1 - scale_factor, high=1 + scale_factor, size=data.shape
@@ -254,7 +254,7 @@ def flip_data(data, axis=0):
     return flipped_data
 
 
-def add_black_pixels(data, percent_pixels=0.05):
+def add_black_pixels(data, percent_pixels=0.1):
     augmented_data = np.copy(data)
 
     num_pixels = int(np.ceil(data.size * percent_pixels))
