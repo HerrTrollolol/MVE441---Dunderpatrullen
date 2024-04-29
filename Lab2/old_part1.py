@@ -9,6 +9,40 @@ import pandas as pd
 from sklearn.utils import shuffle
 import seaborn as sns
 import os
+import scipy.stats as stats
+
+
+def PCA(TCGAdata):
+    X_svd = svd(TCGAdata)
+    new_TCGAdata = TCGAdata @ X_svd[2].T  # Makes TCGAdata into principal components
+    print(X_svd[1].shape)
+    plt.plot(X_svd[1])
+    plt.show()
+    return new_TCGAdata[:, :30]
+
+
+def Anova(TCGAdata, TCGAlabels):
+    p_values = {}
+
+    # Perform ANOVA for each feature
+    for i in range(TCGAdata.shape[1]):
+        # Get the unique groups in labels
+        groups = np.unique(TCGAlabels)
+        # Prepare list of group samples
+        samples = [TCGAdata[TCGAlabels == group, i] for group in groups]
+        # Perform ANOVA (one-way)
+        f_val, p_val = stats.f_oneway(*samples)
+        p_values[i] = p_val
+
+    # Sort features by p-value
+    sorted_indices = sorted(p_values, key=p_values.get)
+    sorted_p_values = {index: p_values[index] for index in sorted_indices}
+    for index in sorted_indices:
+        print(f"Feature {index}: p-value = {sorted_p_values[index]}")
+
+    # If you need to reorder the original feature array according to sorted p-values:
+    sorted_features_array = TCGAdata[:, sorted_indices]
+    return sorted_features_array[:, :500]
 
 
 def RF_break(mode):
@@ -87,10 +121,8 @@ def RF(args):
         )  # Adjust noise_std_dev as needed
 
     TCGAdata = StandardScaler().fit_transform(TCGAdata)
-
-    # if args.data_set != "Cancer":
-    #     X_svd = svd(TCGAdata)
-    #     TCGAdata = TCGAdata @ X_svd[2].T  # Makes TCGAdata into principal components
+    TCGAdata = PCA(TCGAdata) if args.PCA else TCGAdata
+    TCGAdata = Anova(TCGAdata, TCGAlabels) if args.Anova else TCGAdata
 
     TCGA_train, TCGA_test, TCGAlabels_train, TCGAlabels_test = train_test_split(
         TCGAdata, TCGAlabels, test_size=0.2
@@ -133,6 +165,17 @@ def RF(args):
             bootstrap=True,
             max_samples=0.7,
         )
+        if args.PCA or args.Anova:
+            classifier = RandomForestClassifier(
+                n_estimators=1500,
+                criterion="gini",
+                max_depth=None,
+                min_samples_split=2,
+                min_samples_leaf=1,
+                max_features=None,
+                bootstrap=True,
+                max_samples=0.7,
+            )
 
     else:
         classifier = RandomForestClassifier(
@@ -145,6 +188,17 @@ def RF(args):
             bootstrap=True,
             max_samples=0.7,
         )
+        if args.PCA or args.Anova:
+            classifier = RandomForestClassifier(
+                n_estimators=1000,
+                criterion="gini",
+                max_depth=None,
+                min_samples_split=2,
+                min_samples_leaf=1,
+                max_features=None,
+                bootstrap=True,
+                max_samples=0.7,
+            )
 
     classifier.fit(TCGA_train, TCGAlabels_train)
     final_test_score = np.sum(classifier.predict(TCGA_test) == TCGAlabels_test) / len(
@@ -218,8 +272,8 @@ def GBM(args):
         classifier = GradientBoostingClassifier(
             loss="log_loss",
             learning_rate=0.8,
-            n_estimators=100,
-            max_features="sqrt",
+            n_estimators=20,
+            max_features=None,
             subsample=1.0,
             min_samples_split=2,
             max_depth=4,
@@ -278,6 +332,8 @@ if __name__ == "__main__":
     parser.add_argument("--break_method", action="store_true", default=False)
     parser.add_argument("--plot_break", action="store_true", default=False)
     parser.add_argument("--create_break", action="store_true", default=False)
+    parser.add_argument("--PCA", action="store_true", default=False)
+    parser.add_argument("--Anova", action="store_true", default=False)
 
     args = parser.parse_args()
 
