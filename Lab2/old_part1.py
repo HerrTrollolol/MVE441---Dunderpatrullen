@@ -458,7 +458,7 @@ if __name__ == "__main__":
         plt.show()
 
     elif args.plot_feature_noice:
-        noice = [0, 2]
+        noice = [0, 3, 6, 9, 12, 15]
         fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 8))
         fig.suptitle("Feature Importance by Model with Increasing Noise")
 
@@ -472,7 +472,7 @@ if __name__ == "__main__":
             print("då")
 
             base_color_intensity = 0  # Starting intensity for no noise (0 would be white, 1 would be full color)
-            intensity_step = 0.15
+            intensity_step = 0.15 / 3
             # Calculate current intensity level
             current_intensity = base_color_intensity + i * intensity_step
 
@@ -491,12 +491,12 @@ if __name__ == "__main__":
             # Plot
             axes[0].plot(
                 np.sort(feature_importance_GBM)[::-1],
-                label=f"GBM Noise={i}",
+                label=f"Noise={i}",
                 color=darker_red,
             )
             axes[1].plot(
                 np.sort(feature_importance_RF)[::-1],
-                label=f"RF Noise={i}",
+                label=f"Noise={i}",
                 color=darker_blue,
             )
 
