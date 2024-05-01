@@ -271,9 +271,9 @@ def GBM(args):
     else:  # This classifier is for the cats_and_dogs data_set
         classifier = GradientBoostingClassifier(
             loss="log_loss",
-            learning_rate=0.8,
-            n_estimators=20,
-            max_features=None,
+            learning_rate=0.15,
+            n_estimators=150,
+            max_features="sqrt",
             subsample=1.0,
             min_samples_split=2,
             max_depth=4,
