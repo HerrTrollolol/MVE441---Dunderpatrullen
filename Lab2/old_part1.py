@@ -272,11 +272,11 @@ def GBM(args):
         classifier = GradientBoostingClassifier(
             loss="log_loss",
             learning_rate=0.15,
-            n_estimators=150,
+            n_estimators=1000,
             max_features="sqrt",
             subsample=1.0,
             min_samples_split=2,
-            max_depth=4,
+            max_depth=3,
         )
 
     classifier.fit(TCGA_train, TCGAlabels_train)
