@@ -4,19 +4,24 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pygame
 import scipy.stats as stats
 import seaborn as sns
-import tensorflow as tf
 from numpy.linalg import svd
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.kernel_ridge import KernelRidge
+from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
-from tensorflow.keras import layers, models
+
+# from tensorflow.keras import layers, models
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+# os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 
 def load_data():
@@ -54,11 +59,11 @@ def RF(data_train, data_labels_train, data_test, data_labels_test):
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    return (final_train_score, final_test_score, classifier.feature_importances_)
+    return (final_test_score, final_train_score, classifier.feature_importances_)
 
 
 def kernel_regression(data_train, data_labels_train, data_test, data_labels_test):
-    classifier = KernelRidge(alpha=1.0, kernel="rbf", gamma=0.1)
+    classifier = SVC(C=10.0, kernel="rbf", gamma=0.0005)
     classifier.fit(data_train, data_labels_train)
     final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
         data_test
@@ -66,7 +71,7 @@ def kernel_regression(data_train, data_labels_train, data_test, data_labels_test
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
-    return final_train_score, final_test_score
+    return final_test_score, final_train_score
 
 
 def GBM(data_train, data_labels_train, data_test, data_labels_test):
@@ -89,14 +94,14 @@ def GBM(data_train, data_labels_train, data_test, data_labels_test):
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    return (final_train_score, final_test_score, classifier.feature_importances_)
+    return (final_test_score, final_train_score, classifier.feature_importances_)
 
 
 def lasso(data_train, data_labels_train, data_test, data_labels_test):
     classifier = LogisticRegression(
         penalty="l1",
         solver="liblinear",
-        C=0.1,
+        C=20,
     )
     classifier.fit(data_train, data_labels_train)
 
@@ -104,22 +109,83 @@ def lasso(data_train, data_labels_train, data_test, data_labels_test):
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
     final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
-        data_train
+        data_test
     )
-    return final_train_score, final_test_score
+    return final_test_score, final_train_score
+
+
+def NN(data_train, data_labels_train, data_test, data_labels_test):
+    # Convert data to PyTorch tensors
+    data_train = torch.tensor(data_train, dtype=torch.float32)
+    data_labels_train = torch.tensor(data_labels_train, dtype=torch.float32)
+    data_test = torch.tensor(data_test, dtype=torch.float32)
+    data_labels_test = torch.tensor(data_labels_test, dtype=torch.float32)
+
+    # Define the neural network architecture
+    class NeuralNetwork(nn.Module):
+        def __init__(self):
+            super(NeuralNetwork, self).__init__()
+            self.flatten = nn.Flatten()
+            self.fc1 = nn.Linear(64 * 64, 256)
+            self.fc2 = nn.Linear(256, 64)
+            self.fc3 = nn.Linear(64, 16)
+            self.fc4 = nn.Linear(16, 1)
+            self.sigmoid = nn.Sigmoid()
+
+        def forward(self, x):
+            x = self.flatten(x)
+            x = self.fc1(x)
+            x = torch.relu(x)
+            x = self.fc2(x)
+            x = torch.relu(x)
+            x = self.fc3(x)
+            x = torch.relu(x)
+            x = self.fc4(x)
+            x = self.sigmoid(x)
+            return x
+
+    model = NeuralNetwork()
+
+    criterion = nn.BCELoss()
+    optimizer = optim.Adam(model.parameters())
+
+    # Training the model
+    num_epochs = 15
+    for epoch in range(num_epochs):
+        outputs = model(data_train)
+        loss = criterion(outputs, data_labels_train.unsqueeze(1))
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}")
+
+    # Evaluation on test set
+    with torch.no_grad():
+        outputs = model(data_test)
+        predicted = (
+            outputs >= 0.5
+        ).float()  # Convert probabilities to binary predictions
+        accuracy = (predicted == data_labels_test.unsqueeze(1)).float().mean()
+
+        print(f"Test Accuracy: {accuracy.item()}")
+
+    return accuracy.item()
 
 
 def CV_kernel():
     data_train, data_labels_train, _, _ = load_data()
-    alphas = [10e-4, 10e-3, 10e-2, 10e-1, 10e-0]
-    gammas = [10e-4, 10e-3, 10e-2, 10e-1, 10e-0]
+    alphas = [10**i for i in range(0, 5)]
+    gammas = np.round(np.arange(0.00001, 0.001, 0.0001), 5)
     scores = np.zeros((len(alphas), len(gammas)))
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    i, j = 0
+    i, j = 0, 0
     for alpha in alphas:
+        j = 0
         for gamma in gammas:
             accuracies = []
-            classifier = KernelRidge(alpha=alpha, kernel="rbf", gamma=gamma)
+            classifier = SVC(C=alpha, kernel="rbf", gamma=gamma)
             for train_index, test_index in kf.split(data_train):
                 # Split data
                 X_train, X_test = data_train[train_index], data_train[test_index]
@@ -135,8 +201,8 @@ def CV_kernel():
                 predictions = classifier.predict(X_test)
 
                 # Calculate accuracy
-                accuracies = accuracy_score(y_test, predictions)
-                accuracies.append(accuracies)
+                acc = accuracy_score(y_test, predictions)
+                accuracies.append(acc)
             score = np.mean(accuracies)
             print(f"For {alpha} and {gamma} we get the score of {score}.")
             scores[i][j] = score
@@ -147,13 +213,13 @@ def CV_kernel():
         scores,
         annot=True,
         fmt=".2f",
-        xticklabels=alphas,
-        yticklabels=gammas,
+        xticklabels=gammas,
+        yticklabels=alphas,
         cmap="coolwarm",
     )
-    plt.title("Heatmap of Scores")
-    plt.xlabel("Alphas")
-    plt.ylabel("Gammas")
+    plt.title("CV kernel")
+    plt.xlabel("Gammas")
+    plt.ylabel("Alphas")
     plt.show()
 
     return scores
@@ -161,7 +227,7 @@ def CV_kernel():
 
 def CV_lasso():
     data_train, data_labels_train, _, _ = load_data()
-    alphas = [10e-4, 10e-3, 10e-2, 10e-1, 10e-0]
+    alphas = np.arange(0.1, 30.0, 0.1).tolist()
     scores = np.zeros(len(alphas))
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     i = 0
@@ -193,32 +259,12 @@ def CV_lasso():
         i += 1
     plt.figure(figsize=(10, 8))
     plt.plot(alphas, scores)
-    plt.title("Heatmap of Scores")
+    plt.title("CV Lasso")
     plt.xlabel("Alphas")
-    plt.ylabel("Gammas")
+    plt.ylabel("Validation score")
     plt.show()
 
     return scores
-
-
-def NN(data_train, data_labels_train, data_test, data_labels_test):
-    model = models.Sequential(
-        [
-            layers.Flatten(input_shape=(64**2,)),
-            layers.Dense(256, activation="relu"),
-            layers.Dense(64, activation="relu"),
-            layers.Dense(16, activation="relu"),
-            layers.Dense(1, activation="sigmoid"),
-        ]
-    )
-
-    model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
-
-    # model.fit(data_train, data_labels_train)
-    # score = model.predict(data_test, data_labels_test)
-
-    # model.summary()
-    return "hi"
 
 
 def plot_confusion_matrix(y_true, y_predicted):
@@ -240,13 +286,6 @@ def plot_confusion_matrix(y_true, y_predicted):
     plt.ylabel("True Labels")
     plt.title("Confusion Matrix")
     plt.show()
-
-
-def play_heureka_sound():
-    pygame.init()
-    pygame.mixer.init()
-    pygame.mixer.music.load("Sounds\\Heureka.mp3")
-    pygame.mixer.music.play()
 
 
 def plot_misclassified_images(classifier, data_test, data_labels_test):
@@ -275,18 +314,42 @@ def plot_misclassified_images(classifier, data_test, data_labels_test):
         plt.show()
 
 
+def plot_performance(scores):
+    print(scores)
+
+    # Creating the plot
+    # Get the keys and values from the dictionary
+    labels = list(scores.keys())
+    values = list(scores.values())
+    print(values)
+
+    # Creating the bar plot
+    plt.figure(figsize=(10, 6))  # Optional: specifies the size of the figure
+    plt.bar(labels, values, color="blue")  # Creates the bar plot
+
+    # Adding titles and labels
+    plt.title("Accuracy different models")
+    plt.xlabel("Model")
+    plt.ylabel("Accuracy")
+
+    # Show the plot
+    plt.show()
+
+
 def main(args):
 
     data_train, data_labels_train, data_test, data_labels_test = load_data()
     scores = {"RF": [], "GBM": [], "NN": [], "LAS": [], "KR": []}
 
     if "RF" in args.classifier:
-        RF_score = RF(data_train, data_labels_train, data_test, data_labels_test)
+        RF_score, _, _ = RF(data_train, data_labels_train, data_test, data_labels_test)
         scores["RF"] = RF_score
         print("Done")
 
     if "GBM" in args.classifier:
-        GBM_score = GBM(data_train, data_labels_train, data_test, data_labels_test)
+        GBM_score, _, _ = GBM(
+            data_train, data_labels_train, data_test, data_labels_test
+        )
         scores["GBM"] = GBM_score
         print("Done")
 
@@ -296,12 +359,14 @@ def main(args):
         print("Done")
 
     if "LAS" in args.classifier:
-        Lasso_score = lasso(data_train, data_labels_train, data_test, data_labels_test)
+        Lasso_score, _ = lasso(
+            data_train, data_labels_train, data_test, data_labels_test
+        )
         scores["LAS"] = Lasso_score
         print("Done")
 
     if "KR" in args.classifier:
-        KR_score = kernel_regression(
+        KR_score, _ = kernel_regression(
             data_train, data_labels_train, data_test, data_labels_test
         )
         scores["KR"] = KR_score
@@ -313,6 +378,8 @@ def main(args):
     if args.CV == "lasso":
         CV_lasso()
         print("Done")
+    if args.plot_performance:
+        plot_performance(scores)
 
 
 if __name__ == "__main__":
@@ -323,9 +390,10 @@ if __name__ == "__main__":
         nargs="+",
         type=str,
         help="List of classifiers",
-        default=["RF", "GBM", "NN", "LAS", "KR"],
+        default=[],
     )
     parser.add_argument("--CV", type=str)
+    parser.add_argument("--plot_performance", action="store_true", default=False)
 
     args = parser.parse_args()
     main(args)
