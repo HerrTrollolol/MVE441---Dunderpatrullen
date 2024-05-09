@@ -44,15 +44,16 @@ def load_data():
     data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
     data = StandardScaler().fit_transform(data)
+    indices = np.arange(len(data))
 
-    data_train, data_test, data_labels_train, data_labels_test = train_test_split(
-        data, data_labels, test_size=0.2
+    data_train, data_test, data_labels_train, data_labels_test, _, indices_test = (
+        train_test_split(data, data_labels, indices, test_size=0.2)
     )
 
-    return data_train, data_labels_train, data_test, data_labels_test
+    return data_train, data_labels_train, data_test, data_labels_test, indices_test
 
 
-def RF(data_train, data_labels_train, data_test, data_labels_test):
+def RF(data_train, data_labels_train, data_test, data_labels_test, test_indices):
 
     classifier = RandomForestClassifier(
         n_estimators=100,
@@ -66,25 +67,37 @@ def RF(data_train, data_labels_train, data_test, data_labels_test):
     )
 
     classifier.fit(data_train, data_labels_train)
-    final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
-        data_test
-    )
+    predictions_test = classifier.predict(data_test)
+    final_test_score = np.sum(predictions_test == data_labels_test) / len(data_test)
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    return final_test_score, np.array(classifier.feature_importances_)
+    misclassified_indices_test = [
+        index
+        for index, (pred_label, true_label) in zip(
+            test_indices, zip(predictions_test, data_labels_test)
+        )
+        if pred_label != true_label
+    ]
+
+    return (
+        final_test_score,
+        np.array(classifier.feature_importances_),
+        misclassified_indices_test,
+    )
 
 
-def SVC_(data_train, data_labels_train, data_test, data_labels_test, rbf=True):
+def SVC_(
+    data_train, data_labels_train, data_test, data_labels_test, test_indices, rbf=True
+):
     if rbf:
         classifier = SVC(C=10.0, kernel="rbf", gamma=0.0005)
     else:
         classifier = SVC(C=10.0, kernel="linear")
     classifier.fit(data_train, data_labels_train)
-    final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
-        data_test
-    )
+    predictions_test = classifier.predict(data_test)
+    final_test_score = np.sum(predictions_test == data_labels_test) / len(data_test)
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
@@ -93,10 +106,18 @@ def SVC_(data_train, data_labels_train, data_test, data_labels_test, rbf=True):
     else:
         params = []
 
-    return final_test_score, np.array(params)
+    misclassified_indices_test = [
+        index
+        for index, (pred_label, true_label) in zip(
+            test_indices, zip(predictions_test, data_labels_test)
+        )
+        if pred_label != true_label
+    ]
+
+    return final_test_score, np.array(params), misclassified_indices_test
 
 
-def GBM(data_train, data_labels_train, data_test, data_labels_test):
+def GBM(data_train, data_labels_train, data_test, data_labels_test, test_indices):
 
     classifier = GradientBoostingClassifier(
         loss="log_loss",
@@ -109,37 +130,54 @@ def GBM(data_train, data_labels_train, data_test, data_labels_test):
     )
 
     classifier.fit(data_train, data_labels_train)
-    final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
-        data_test
-    )
+    predictions_test = classifier.predict(data_test)
+    final_test_score = np.sum(predictions_test == data_labels_test) / len(data_test)
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    return final_test_score, np.array(classifier.feature_importances_)
+    misclassified_indices_test = [
+        index
+        for index, (pred_label, true_label) in zip(
+            test_indices, zip(predictions_test, data_labels_test)
+        )
+        if pred_label != true_label
+    ]
+
+    return (
+        final_test_score,
+        np.array(classifier.feature_importances_),
+        misclassified_indices_test,
+    )
 
 
-def lasso(data_train, data_labels_train, data_test, data_labels_test):
+def lasso(data_train, data_labels_train, data_test, data_labels_test, test_indices):
     classifier = LogisticRegression(
         penalty="l1",
         solver="liblinear",
         C=20,
     )
     classifier.fit(data_train, data_labels_train)
-
+    predictions_test = classifier.predict(data_test)
+    final_test_score = np.sum(predictions_test == data_labels_test) / len(data_test)
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
-    final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
-        data_test
-    )
 
     params = classifier.coef_[0]
 
-    return final_test_score, np.array(params)
+    misclassified_indices_test = [
+        index
+        for index, (pred_label, true_label) in zip(
+            test_indices, zip(predictions_test, data_labels_test)
+        )
+        if pred_label != true_label
+    ]
+
+    return final_test_score, np.array(params), misclassified_indices_test
 
 
-def NN(data_train, data_labels_train, data_test, data_labels_test):
+def NN(data_train, data_labels_train, data_test, data_labels_test, test_indices):
     # Convert data to PyTorch tensors
     data_train = torch.tensor(data_train, dtype=torch.float32)
     data_labels_train = torch.tensor(data_labels_train, dtype=torch.float32)
@@ -277,11 +315,19 @@ def NN(data_train, data_labels_train, data_test, data_labels_test):
     # Compute the average saliency map
     avg_saliency = sum_saliency / count
 
-    return accuracy.item(), np.array(avg_saliency)
+    misclassified_indices_test = [
+        index
+        for index, (pred_label, true_label) in zip(
+            test_indices, zip(predicted, data_labels_test)
+        )
+        if pred_label != true_label
+    ]
+
+    return (accuracy.item(), np.array(avg_saliency), misclassified_indices_test)
 
 
 def CV_kernel():
-    data_train, data_labels_train, _, _ = load_data()
+    data_train, data_labels_train, _, _, _ = load_data()
     alphas = [10**i for i in range(0, 5)]
     gammas = np.round(np.arange(0.00001, 0.001, 0.0001), 5)
     scores = np.zeros((len(alphas), len(gammas)))
@@ -332,7 +378,7 @@ def CV_kernel():
 
 
 def CV_lasso():
-    data_train, data_labels_train, _, _ = load_data()
+    data_train, data_labels_train, _, _, _ = load_data()
     alphas = np.arange(0.1, 30.0, 0.1).tolist()
     scores = np.zeros(len(alphas))
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -456,7 +502,7 @@ def plot_performance(scores):
 
 
 def plot_features(model_feature_importances):
-    _, _, data_test, _ = load_data()
+    _, _, data_test, _, _ = load_data()
     # Append test images to the dictionary with specific keys
     model_feature_importances["Test image 1"] = data_test[0]
     model_feature_importances["Test image 2"] = data_test[1]
@@ -510,52 +556,72 @@ def plot_features(model_feature_importances):
 def main(args):
 
     scores = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
-    averages = 100 if args.plot_performance else 1
     feature_importances = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
+    misclassified_indices = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
+
+    averages = 10 if args.plot_performance else 1
     for i in range(averages):
-        data_train, data_labels_train, data_test, data_labels_test = load_data()
+        data_train, data_labels_train, data_test, data_labels_test, test_indices = (
+            load_data()
+        )
         if "RF" in args.classifier:
-            RF_score, feature_importance = RF(
-                data_train, data_labels_train, data_test, data_labels_test
+            RF_score, feature_importance, misclassified_indices_test = RF(
+                data_train, data_labels_train, data_test, data_labels_test, test_indices
             )
             scores["RF"].append(RF_score)
             feature_importances["RF"] = feature_importance
+            misclassified_indices["RF"].extend(misclassified_indices_test)
             print(f"RF iteration [{i+1}/{averages}] Done")
 
         if "GBM" in args.classifier:
-            GBM_score, feature_importance = GBM(
-                data_train, data_labels_train, data_test, data_labels_test
+            GBM_score, feature_importance, misclassified_indices_test = GBM(
+                data_train, data_labels_train, data_test, data_labels_test, test_indices
             )
             scores["GBM"].append(GBM_score)
             feature_importances["GBM"] = feature_importance
+            misclassified_indices["RF"].extend(misclassified_indices_test)
             print(f"GBM iteration [{i+1}/{averages}] Done")
 
         if "NN" in args.classifier:
             NN_suppressed = suppress_print(NN)
-            NN_score, feature_importance = NN_suppressed(
-                data_train, data_labels_train, data_test, data_labels_test
+            NN_score, feature_importance, misclassified_indices_test = NN_suppressed(
+                data_train, data_labels_train, data_test, data_labels_test, test_indices
             )
             scores["NN"].append(NN_score)
             feature_importances["NN"] = feature_importance
+            misclassified_indices["RF"].extend(misclassified_indices_test)
+
             print(f"NN iteration [{i+1}/{averages}] Done")
 
         if "LASSO" in args.classifier:
-            Lasso_score, feature_importance = lasso(
-                data_train, data_labels_train, data_test, data_labels_test
+            Lasso_score, feature_importance, misclassified_indices_test = lasso(
+                data_train, data_labels_train, data_test, data_labels_test, test_indices
             )
             scores["LASSO"].append(Lasso_score)
             feature_importances["LASSO"] = feature_importance
+            misclassified_indices["RF"].extend(misclassified_indices_test)
             print(f"LASSO iteration [{i+1}/{averages}] Done")
 
         if "SVC" in args.classifier:
-            SVC_score, _ = SVC_(
-                data_train, data_labels_train, data_test, data_labels_test
+            SVC_score, _, misclassified_indices_test = SVC_(
+                data_train,
+                data_labels_train,
+                data_test,
+                data_labels_test,
+                test_indices,
+                rbf=True,
             )
-            _, feature_importance = SVC_(
-                data_train, data_labels_train, data_test, data_labels_test, False
+            _, feature_importance, _ = SVC_(
+                data_train,
+                data_labels_train,
+                data_test,
+                data_labels_test,
+                test_indices,
+                rbf=False,
             )
             feature_importances["SVC"] = feature_importance
             scores["SVC"].append(SVC_score)
+            misclassified_indices["RF"].extend(misclassified_indices_test)
             print(f"SVC iteration [{i+1}/{averages}] Done")
 
     if args.CV == "kernel":
