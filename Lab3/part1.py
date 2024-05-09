@@ -16,6 +16,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
+from collections import Counter
 
 # from tensorflow.keras import layers, models
 import torch
@@ -41,7 +42,7 @@ def suppress_print(func):
 def load_data():
 
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
-    data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
+    data_labels = np.loadtxt("data/CorrectLabels.csv", delimiter=",", skiprows=1)
 
     data = StandardScaler().fit_transform(data)
     indices = np.arange(len(data))
@@ -269,7 +270,24 @@ def NN(data_train, data_labels_train, data_test, data_labels_test, test_indices)
 
     # Evaluation on test set
     model = NeuralNetwork()
-    model.load_state_dict(torch.load(save_path))
+
+    def load_model_with_retries(model, save_path, max_attempts=5):
+        attempt = 0
+        while attempt < max_attempts:
+            try:
+                model.load_state_dict(torch.load(save_path))
+                print("Model loaded successfully.")
+                return True  # Return True if loading was successful
+            except Exception as e:
+                print(f"Failed to load model on attempt {attempt+1}: {e}")
+                attempt += 1
+                # Optionally, add a delay (e.g., using time.sleep(seconds)) if needed
+
+        print("Reached maximum attempt limit, failed to load model.")
+        return False  # Return False if all attempts fail
+
+    # model.load_state_dict(torch.load(save_path))
+    success = load_model_with_retries(model, save_path)
     model.eval()
     with torch.no_grad():
         outputs = model(data_test)
@@ -440,32 +458,6 @@ def plot_confusion_matrix(y_true, y_predicted):
     plt.show()
 
 
-def plot_misclassified_images(classifier, data_test, data_labels_test):
-    predictions_test = classifier.predict(data_test)
-    misclassified_indices = np.where(predictions_test != data_labels_test)[0]
-
-    # Plot misclassified images
-    for idx in misclassified_indices:
-        predicted_label = predictions_test[idx]
-        actual_label = data_labels_test[idx]
-
-        image_shape = (64, 64)
-        misclassified_image = data_test[idx].reshape(image_shape)
-
-        if predicted_label == 0:
-            predicted_label = "Cat"
-        else:
-            predicted_label = "Dog"
-        if actual_label == 0:
-            actual_label = "Cat"
-        else:
-            actual_label = "Dog"
-        # Show the misclassified image
-        plt.imshow(misclassified_image, cmap="gray")
-        plt.title(f"Predicted: {predicted_label}, Actual: {actual_label}")
-        plt.show()
-
-
 def plot_performance(scores):
     print(scores)
 
@@ -553,17 +545,100 @@ def plot_features(model_feature_importances):
     plt.show()
 
 
+def plot_misclassified_indices(misclassified_indices, test_indices_counter):
+    classifiers = list(misclassified_indices.keys())
+    color_map = plt.get_cmap("tab10")
+    bar_width = 0.6
+    total_images = 198
+    tick_interval = 25
+
+    # Convert test_indices_counter list to a Counter object for easier counting
+    test_index_counts = Counter(test_indices_counter)
+
+    # Initialize counters for all image indices (0 to total_images - 1)
+    misclassified_counts = {
+        classifier: Counter(misclassified_indices[classifier])
+        for classifier in classifiers
+    }
+
+    # Create a complete range of image indices
+    all_indices = list(range(total_images))
+    index_positions = np.arange(total_images)
+
+    # Prepare the stacked bar chart
+    fig, ax = plt.subplots(figsize=(15, 6))
+    bottoms = np.zeros(total_images)
+    for idx, classifier in enumerate(classifiers):
+        y_values = [
+            misclassified_counts[classifier].get(image_idx, 0)
+            / test_index_counts.get(image_idx, 1)
+            for image_idx in all_indices
+        ]
+        ax.bar(
+            index_positions,
+            y_values,
+            bar_width,
+            label=classifier,
+            color=color_map(idx % 10),
+            bottom=bottoms,
+        )
+        bottoms += np.array(y_values)
+
+    # Adjust x-axis ticks and labels
+    visible_indices = range(0, total_images, tick_interval)
+    ax.set_xlabel("Image Index")
+    ax.set_ylabel("Normalized Misclassified Count")
+    ax.set_title("Normalized Number of Times Each Classifier Misclassifies Each Image")
+    ax.set_xticks(visible_indices)
+    ax.set_xticklabels(visible_indices)
+    ax.legend(title="Classifier", bbox_to_anchor=(1.05, 1), loc="upper left")
+
+    # Adjust y-axis to fit all stacked bars
+    max_count = np.max(bottoms)
+    ax.set_ylim(0, max_count + 1)
+    ax.grid(axis="y")  # Add horizontal grid lines for better readability
+    plt.tight_layout()  # Adjust layout to not cut off labels
+    plt.show()
+    np.save("accuarcies.npy", bottoms)
+
+
+# lista med indices och plottar bilderna
+def plot_misclassified_images():
+    accuracies = np.load("accuarcies.npy")
+    indices_sorted = np.argsort(accuracies)[::-1]
+    image_shape = (64, 64)  # Define the shape of images
+    data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+    data_labels = np.loadtxt("data/CorrectLabels.csv", delimiter=",", skiprows=1)
+
+    for i in indices_sorted:
+        actual_label = data_labels[i]
+        predicted_label = "Dog" if actual_label == 0 else "Cat"
+        misclassified_image = data[i].reshape(image_shape).T
+
+        # Convert numerical labels to text for the title
+        actual_label_text = "Cat" if actual_label == 0 else "Dog"
+
+        # Display the misclassified image with predicted and actual labels
+        plt.imshow(misclassified_image, cmap="gray")
+        plt.title(
+            f" Index: {i}, Predicted: {predicted_label}, Actual: {actual_label_text}, Error rate: {round(accuracies[i]/5,2)}"
+        )
+        plt.show()
+
+
 def main(args):
 
     scores = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
     feature_importances = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
     misclassified_indices = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
+    test_indices_counter = []
 
-    averages = 10 if args.plot_performance else 1
+    averages = 10 if (args.plot_performance or args.plot_misclassified_indices) else 1
     for i in range(averages):
         data_train, data_labels_train, data_test, data_labels_test, test_indices = (
             load_data()
         )
+        test_indices_counter.extend(test_indices)
         if "RF" in args.classifier:
             RF_score, feature_importance, misclassified_indices_test = RF(
                 data_train, data_labels_train, data_test, data_labels_test, test_indices
@@ -579,7 +654,7 @@ def main(args):
             )
             scores["GBM"].append(GBM_score)
             feature_importances["GBM"] = feature_importance
-            misclassified_indices["RF"].extend(misclassified_indices_test)
+            misclassified_indices["GBM"].extend(misclassified_indices_test)
             print(f"GBM iteration [{i+1}/{averages}] Done")
 
         if "NN" in args.classifier:
@@ -589,7 +664,7 @@ def main(args):
             )
             scores["NN"].append(NN_score)
             feature_importances["NN"] = feature_importance
-            misclassified_indices["RF"].extend(misclassified_indices_test)
+            misclassified_indices["NN"].extend(misclassified_indices_test)
 
             print(f"NN iteration [{i+1}/{averages}] Done")
 
@@ -599,7 +674,7 @@ def main(args):
             )
             scores["LASSO"].append(Lasso_score)
             feature_importances["LASSO"] = feature_importance
-            misclassified_indices["RF"].extend(misclassified_indices_test)
+            misclassified_indices["LASSO"].extend(misclassified_indices_test)
             print(f"LASSO iteration [{i+1}/{averages}] Done")
 
         if "SVC" in args.classifier:
@@ -621,7 +696,7 @@ def main(args):
             )
             feature_importances["SVC"] = feature_importance
             scores["SVC"].append(SVC_score)
-            misclassified_indices["RF"].extend(misclassified_indices_test)
+            misclassified_indices["SVC"].extend(misclassified_indices_test)
             print(f"SVC iteration [{i+1}/{averages}] Done")
 
     if args.CV == "kernel":
@@ -634,6 +709,10 @@ def main(args):
         plot_performance(scores)
     if args.plot_features:
         plot_features(feature_importances)
+    if args.plot_misclassified_indices:
+        plot_misclassified_indices(misclassified_indices, test_indices_counter)
+    if args.plot_misclassified_images:
+        plot_misclassified_images()
 
 
 if __name__ == "__main__":
@@ -649,6 +728,12 @@ if __name__ == "__main__":
     parser.add_argument("--CV", type=str)
     parser.add_argument("--plot_performance", action="store_true", default=False)
     parser.add_argument("--plot_features", action="store_true", default=False)
+    parser.add_argument(
+        "--plot_misclassified_indices", action="store_true", default=False
+    )
+    parser.add_argument(
+        "--plot_misclassified_images", action="store_true", default=False
+    )
 
     args = parser.parse_args()
     main(args)
