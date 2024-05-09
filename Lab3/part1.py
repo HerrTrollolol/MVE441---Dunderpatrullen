@@ -19,6 +19,7 @@ from sklearn.utils import shuffle
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset, random_split
 
 # os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 # os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -147,21 +148,67 @@ def NN(data_train, data_labels_train, data_test, data_labels_test):
     model = NeuralNetwork()
 
     criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(model.parameters(), lr=0.0005)
 
+    save_path = "best_model.pth"
+
+    num_items = len(data_train)  # total number of items in the dataset
+    num_train = int(num_items * 0.9)  # 90% for training
+    num_val = num_items - num_train  # 10% for validation
+
+    full_dataset = TensorDataset(data_train, data_labels_train)
+    train_data, val_data = random_split(full_dataset, [num_train, num_val])
+
+    # Training the model with early stopping
+    best_val_loss = float("inf")
+    patience = 3  # Patience is the number of epochs to tolerate no improvement
+    trigger_times = 0  # How many times the trigger condition has been met
+
+    # Create DataLoaders
+    train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
+    val_loader = DataLoader(val_data, batch_size=1, shuffle=False)
     # Training the model
-    num_epochs = 15
+    num_epochs = 50
     for epoch in range(num_epochs):
-        outputs = model(data_train)
-        loss = criterion(outputs, data_labels_train.unsqueeze(1))
+        model.train()
+        for inputs, labels in train_loader:
+            outputs = model(inputs)
+            loss = criterion(outputs, labels.unsqueeze(1))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # Validation phase
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                outputs = model(inputs)
+                v_loss = criterion(outputs, labels.unsqueeze(1))
+                val_loss += v_loss.item()
 
-        print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}")
+        val_loss /= len(val_loader)
+        print(
+            f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}, Val Loss: {val_loss}"
+        )
+
+        # Early stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            trigger_times = 0
+            torch.save(model.state_dict(), save_path)
+            print(f"Best model saved with validation loss: {best_val_loss}")
+        else:
+            trigger_times += 1
+            print(f"No improvement in validation loss for {trigger_times} epochs...")
+            if trigger_times >= patience:
+                print("Stopping early.")
+                break
 
     # Evaluation on test set
+    model = NeuralNetwork()
+    model.load_state_dict(torch.load(save_path))
+    model.eval()
     with torch.no_grad():
         outputs = model(data_test)
         predicted = (
@@ -325,7 +372,7 @@ def plot_performance(scores):
 
     # Creating the bar plot
     plt.figure(figsize=(10, 6))  # Optional: specifies the size of the figure
-    plt.bar(labels, values, color="blue")  # Creates the bar plot
+    plt.boxplot(values, labels=labels)  # Creates the bar plot
 
     # Adding titles and labels
     plt.title("Accuracy different models")
@@ -335,42 +382,59 @@ def plot_performance(scores):
     # Show the plot
     plt.show()
 
+    df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in scores.items()]))
+
+    # Create a violin plot
+    plt.figure(figsize=(10, 6))
+    sns.violinplot(data=df)
+
+    # Adding titles and labels
+    plt.title("Comparison of Model Performances")
+    plt.xlabel("Model")
+    plt.ylabel("Accuracy")
+
+    # Show the plot
+    plt.show()
+
 
 def main(args):
 
-    data_train, data_labels_train, data_test, data_labels_test = load_data()
     scores = {"RF": [], "GBM": [], "NN": [], "LAS": [], "KR": []}
+    averages = 30 if args.plot_performance else 110
+    for i in range(averages):
+        data_train, data_labels_train, data_test, data_labels_test = load_data()
+        if "RF" in args.classifier:
+            RF_score, _, _ = RF(
+                data_train, data_labels_train, data_test, data_labels_test
+            )
+            scores["RF"].append(RF_score)
+            print(f"RF iteration [{i+1}/{averages}] Done")
 
-    if "RF" in args.classifier:
-        RF_score, _, _ = RF(data_train, data_labels_train, data_test, data_labels_test)
-        scores["RF"] = RF_score
-        print("Done")
+        if "GBM" in args.classifier:
+            GBM_score, _, _ = GBM(
+                data_train, data_labels_train, data_test, data_labels_test
+            )
+            scores["GBM"].append(GBM_score)
+            print(f"GBM iteration [{i+1}/{averages}] Done")
 
-    if "GBM" in args.classifier:
-        GBM_score, _, _ = GBM(
-            data_train, data_labels_train, data_test, data_labels_test
-        )
-        scores["GBM"] = GBM_score
-        print("Done")
+        if "NN" in args.classifier:
+            NN_score = NN(data_train, data_labels_train, data_test, data_labels_test)
+            scores["NN"].append(NN_score)
+            print(f"NN iteration [{i+1}/{averages}] Done")
 
-    if "NN" in args.classifier:
-        NN_score = NN(data_train, data_labels_train, data_test, data_labels_test)
-        scores["NN"] = NN_score
-        print("Done")
+        if "LAS" in args.classifier:
+            Lasso_score, _ = lasso(
+                data_train, data_labels_train, data_test, data_labels_test
+            )
+            scores["LAS"].append(Lasso_score)
+            print(f"LAS iteration [{i+1}/{averages}] Done")
 
-    if "LAS" in args.classifier:
-        Lasso_score, _ = lasso(
-            data_train, data_labels_train, data_test, data_labels_test
-        )
-        scores["LAS"] = Lasso_score
-        print("Done")
-
-    if "KR" in args.classifier:
-        KR_score, _ = kernel_regression(
-            data_train, data_labels_train, data_test, data_labels_test
-        )
-        scores["KR"] = KR_score
-        print("Done")
+        if "KR" in args.classifier:
+            KR_score, _ = kernel_regression(
+                data_train, data_labels_train, data_test, data_labels_test
+            )
+            scores["KR"].append(KR_score)
+            print(f"KR iteration [{i+1}/{averages}] Done")
 
     if args.CV == "kernel":
         CV_kernel()
