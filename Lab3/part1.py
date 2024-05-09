@@ -1,5 +1,7 @@
 import argparse
 import os
+import sys
+import io
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,6 +25,17 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 
 # os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 # os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
+
+def suppress_print(func):
+    def wrapper(*args, **kwargs):
+        original_stdout = sys.stdout  # Save the original stdout
+        sys.stdout = io.StringIO()  # Redirect stdout to a new StringIO object
+        result = func(*args, **kwargs)
+        sys.stdout = original_stdout  # Restore the original stdout
+        return result
+
+    return wrapper
 
 
 def load_data():
@@ -60,11 +73,14 @@ def RF(data_train, data_labels_train, data_test, data_labels_test):
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    return (final_test_score, final_train_score, classifier.feature_importances_)
+    return final_test_score, np.array(classifier.feature_importances_)
 
 
-def kernel_regression(data_train, data_labels_train, data_test, data_labels_test):
-    classifier = SVC(C=10.0, kernel="rbf", gamma=0.0005)
+def SVC_(data_train, data_labels_train, data_test, data_labels_test, rbf=True):
+    if rbf:
+        classifier = SVC(C=10.0, kernel="rbf", gamma=0.0005)
+    else:
+        classifier = SVC(C=10.0, kernel="linear")
     classifier.fit(data_train, data_labels_train)
     final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
         data_test
@@ -72,7 +88,12 @@ def kernel_regression(data_train, data_labels_train, data_test, data_labels_test
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
-    return final_test_score, final_train_score
+    if not rbf:
+        params = classifier.coef_[0]
+    else:
+        params = []
+
+    return final_test_score, np.array(params)
 
 
 def GBM(data_train, data_labels_train, data_test, data_labels_test):
@@ -95,7 +116,7 @@ def GBM(data_train, data_labels_train, data_test, data_labels_test):
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    return (final_test_score, final_train_score, classifier.feature_importances_)
+    return final_test_score, np.array(classifier.feature_importances_)
 
 
 def lasso(data_train, data_labels_train, data_test, data_labels_test):
@@ -112,7 +133,10 @@ def lasso(data_train, data_labels_train, data_test, data_labels_test):
     final_test_score = np.sum(classifier.predict(data_test) == data_labels_test) / len(
         data_test
     )
-    return final_test_score, final_train_score
+
+    params = classifier.coef_[0]
+
+    return final_test_score, np.array(params)
 
 
 def NN(data_train, data_labels_train, data_test, data_labels_test):
@@ -218,7 +242,42 @@ def NN(data_train, data_labels_train, data_test, data_labels_test):
 
         print(f"Test Accuracy: {accuracy.item()}")
 
-    return accuracy.item()
+    model.eval()
+
+    # Prepare the data loader for the test dataset
+    test_loader = DataLoader(
+        TensorDataset(data_test, data_labels_test), batch_size=1, shuffle=False
+    )
+
+    # Initialize a tensor to store the sum of all saliency maps
+    sum_saliency = None
+    count = 0
+
+    # Loop through all images in the test set
+    for inputs, _ in test_loader:
+        inputs.requires_grad = True
+        outputs = model(inputs)
+
+        # Assume binary classification and the model outputs a single value per input
+        outputs = outputs.squeeze()  # Remove unnecessary dimensions if present
+        outputs.backward()  # Compute the gradients with respect to the input image
+
+        # Compute the saliency map as the absolute value of the gradients
+        saliency = inputs.grad.data.abs().squeeze()
+
+        # Accumulate the saliency maps
+        if sum_saliency is None:
+            sum_saliency = saliency
+        else:
+            sum_saliency += saliency
+
+        count += 1
+        inputs.grad.data.zero_()  # Reset gradients to zero for the next iteration
+
+    # Compute the average saliency map
+    avg_saliency = sum_saliency / count
+
+    return accuracy.item(), np.array(avg_saliency)
 
 
 def CV_kernel():
@@ -368,7 +427,6 @@ def plot_performance(scores):
     # Get the keys and values from the dictionary
     labels = list(scores.keys())
     values = list(scores.values())
-    print(values)
 
     # Creating the bar plot
     plt.figure(figsize=(10, 6))  # Optional: specifies the size of the figure
@@ -397,44 +455,108 @@ def plot_performance(scores):
     plt.show()
 
 
+def plot_features(model_feature_importances):
+    _, _, data_test, _ = load_data()
+    # Append test images to the dictionary with specific keys
+    model_feature_importances["Test image 1"] = data_test[0]
+    model_feature_importances["Test image 2"] = data_test[1]
+    model_feature_importances["Test image 3"] = data_test[2]
+
+    num_models = len(model_feature_importances)
+
+    # Setup the matplotlib figure and axes, 3 rows and 3 columns
+    fig, axes = plt.subplots(3, 3, figsize=(15, 15))  # Adjust figsize as needed
+
+    # Flatten the axes array for easier iteration if there are more than one row and column
+    axes = axes.flatten()
+
+    # Store a reference image for the colorbar, preferably not a test image
+    reference_image = None
+
+    # Iterate over the images and their axes to plot each image
+    for ax, (model_name, image_array) in zip(
+        axes, reversed(list(model_feature_importances.items()))
+    ):
+        # Ensure the image data is in NumPy array format
+        if isinstance(image_array, list):
+            image_array = np.array(image_array)
+
+        # Reshape the flat array to 64x64 and transpose it
+        image_matrix = image_array.reshape(64, 64).T
+
+        # Display the image
+        cmap = "gray" if "Test image" in model_name else "hot"
+        im = ax.imshow(image_matrix, cmap=cmap, aspect="auto")
+        ax.set_title(model_name)
+        ax.axis("off")  # Turn off axis ticks and labels
+
+        # Save the first non-test image reference for the colorbar
+        if reference_image is None and "Test image" not in model_name:
+            reference_image = im
+
+    # Add a colorbar using the reference image
+    if reference_image is not None:
+        cax = fig.add_axes([0.67, 0.01, 0.01, 0.305])  # Position for the colorbar
+        fig.colorbar(reference_image, cax=cax)
+
+    # Hide any unused axes
+    for i in range(num_models, len(axes)):
+        axes[i].axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+
 def main(args):
 
-    scores = {"RF": [], "GBM": [], "NN": [], "LAS": [], "KR": []}
-    averages = 30 if args.plot_performance else 110
+    scores = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
+    averages = 100 if args.plot_performance else 1
+    feature_importances = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
     for i in range(averages):
         data_train, data_labels_train, data_test, data_labels_test = load_data()
         if "RF" in args.classifier:
-            RF_score, _, _ = RF(
+            RF_score, feature_importance = RF(
                 data_train, data_labels_train, data_test, data_labels_test
             )
             scores["RF"].append(RF_score)
+            feature_importances["RF"] = feature_importance
             print(f"RF iteration [{i+1}/{averages}] Done")
 
         if "GBM" in args.classifier:
-            GBM_score, _, _ = GBM(
+            GBM_score, feature_importance = GBM(
                 data_train, data_labels_train, data_test, data_labels_test
             )
             scores["GBM"].append(GBM_score)
+            feature_importances["GBM"] = feature_importance
             print(f"GBM iteration [{i+1}/{averages}] Done")
 
         if "NN" in args.classifier:
-            NN_score = NN(data_train, data_labels_train, data_test, data_labels_test)
+            NN_suppressed = suppress_print(NN)
+            NN_score, feature_importance = NN_suppressed(
+                data_train, data_labels_train, data_test, data_labels_test
+            )
             scores["NN"].append(NN_score)
+            feature_importances["NN"] = feature_importance
             print(f"NN iteration [{i+1}/{averages}] Done")
 
-        if "LAS" in args.classifier:
-            Lasso_score, _ = lasso(
+        if "LASSO" in args.classifier:
+            Lasso_score, feature_importance = lasso(
                 data_train, data_labels_train, data_test, data_labels_test
             )
-            scores["LAS"].append(Lasso_score)
-            print(f"LAS iteration [{i+1}/{averages}] Done")
+            scores["LASSO"].append(Lasso_score)
+            feature_importances["LASSO"] = feature_importance
+            print(f"LASSO iteration [{i+1}/{averages}] Done")
 
-        if "KR" in args.classifier:
-            KR_score, _ = kernel_regression(
+        if "SVC" in args.classifier:
+            SVC_score, _ = SVC_(
                 data_train, data_labels_train, data_test, data_labels_test
             )
-            scores["KR"].append(KR_score)
-            print(f"KR iteration [{i+1}/{averages}] Done")
+            _, feature_importance = SVC_(
+                data_train, data_labels_train, data_test, data_labels_test, False
+            )
+            feature_importances["SVC"] = feature_importance
+            scores["SVC"].append(SVC_score)
+            print(f"SVC iteration [{i+1}/{averages}] Done")
 
     if args.CV == "kernel":
         CV_kernel()
@@ -444,6 +566,8 @@ def main(args):
         print("Done")
     if args.plot_performance:
         plot_performance(scores)
+    if args.plot_features:
+        plot_features(feature_importances)
 
 
 if __name__ == "__main__":
@@ -458,6 +582,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--CV", type=str)
     parser.add_argument("--plot_performance", action="store_true", default=False)
+    parser.add_argument("--plot_features", action="store_true", default=False)
 
     args = parser.parse_args()
     main(args)
