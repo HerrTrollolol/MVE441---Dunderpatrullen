@@ -41,6 +41,14 @@ def suppress_print(func):
 
     return wrapper
 
+def get_average_images(data, labels):
+    cat_images = data[labels == 0]
+    dog_images = data[labels == 1]
+    
+    avg_cat_image = np.mean(cat_images, axis=0)
+    avg_dog_image = np.mean(dog_images, axis=0)
+    
+    return avg_cat_image, avg_dog_image
 
 def load_data():
 
@@ -550,6 +558,7 @@ def plot_performance(scores):
 def plot_features(model_feature_importances):
     _, _, data_test, data_labels, _ = load_data()
 
+
     # Filter data based on labels
     label0_data = data_test[data_labels == 0]
     label1_data = data_test[data_labels == 1]
@@ -562,6 +571,8 @@ def plot_features(model_feature_importances):
     if len(label1_data) > 0:
         average_image1 = np.mean(label1_data, axis=0)
         model_feature_importances["Average image Label Dog"] = average_image1
+
+
 
     model_feature_importances["Average image Label difference"] = abs(
         average_image1 - average_image0
@@ -743,6 +754,7 @@ def load_data_split():
     scores_NN = np.zeros((16))
     scores_lasso = np.zeros((16))
     scores_SVC = np.zeros((16))
+    scores_total = np.zeros((16))
     for i in range(16):
         print(f"block [{i+1}/{16}]")
         current_block_train_data = blocks_train[:, i, :]
@@ -790,17 +802,22 @@ def load_data_split():
         )[0]
 
     fig, axes = plt.subplots(
-        nrows=3, ncols=2, figsize=(10, 15)
+        nrows=3, ncols=3, figsize=(10, 15)
     )  # Adjust the layout and size as needed
 
     # List of scores and titles
     scores = [scores_RF, scores_GBM, scores_NN, scores_lasso, scores_SVC]
+    for i in range(16):
+        for score in scores:
+            scores_total[i] += score[i]
+    scores.append(scores_total / len(scores))
     titles = [
         "Heatmap of RF",
         "Heatmap of GBM",
         "Heatmap of NN",
         "Heatmap of Lasso",
         "Heatmap of SVC",
+        "Heatmap total"
     ]
 
     # Create each subplot
