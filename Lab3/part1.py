@@ -17,6 +17,9 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 from collections import Counter
+from itertools import islice
+
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # from tensorflow.keras import layers, models
 import torch
@@ -42,7 +45,7 @@ def suppress_print(func):
 def load_data():
 
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
-    data_labels = np.loadtxt("data/CorrectLabels.csv", delimiter=",", skiprows=1)
+    data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
     data = StandardScaler().fit_transform(data)
     indices = np.arange(len(data))
@@ -54,7 +57,14 @@ def load_data():
     return data_train, data_labels_train, data_test, data_labels_test, indices_test
 
 
-def RF(data_train, data_labels_train, data_test, data_labels_test, test_indices):
+def RF(
+    data_train,
+    data_labels_train,
+    data_test,
+    data_labels_test,
+    test_indices,
+    misclassed=True,
+):
 
     classifier = RandomForestClassifier(
         n_estimators=100,
@@ -73,14 +83,16 @@ def RF(data_train, data_labels_train, data_test, data_labels_test, test_indices)
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
-
-    misclassified_indices_test = [
-        index
-        for index, (pred_label, true_label) in zip(
-            test_indices, zip(predictions_test, data_labels_test)
-        )
-        if pred_label != true_label
-    ]
+    if misclassed:
+        misclassified_indices_test = [
+            index
+            for index, (pred_label, true_label) in zip(
+                test_indices, zip(predictions_test, data_labels_test)
+            )
+            if pred_label != true_label
+        ]
+    else:
+        misclassified_indices_test = None
 
     return (
         final_test_score,
@@ -90,7 +102,13 @@ def RF(data_train, data_labels_train, data_test, data_labels_test, test_indices)
 
 
 def SVC_(
-    data_train, data_labels_train, data_test, data_labels_test, test_indices, rbf=True
+    data_train,
+    data_labels_train,
+    data_test,
+    data_labels_test,
+    test_indices,
+    rbf=True,
+    misclassed=True,
 ):
     if rbf:
         classifier = SVC(C=10.0, kernel="rbf", gamma=0.0005)
@@ -107,18 +125,28 @@ def SVC_(
     else:
         params = []
 
-    misclassified_indices_test = [
-        index
-        for index, (pred_label, true_label) in zip(
-            test_indices, zip(predictions_test, data_labels_test)
-        )
-        if pred_label != true_label
-    ]
+    if misclassed:
+        misclassified_indices_test = [
+            index
+            for index, (pred_label, true_label) in zip(
+                test_indices, zip(predictions_test, data_labels_test)
+            )
+            if pred_label != true_label
+        ]
+    else:
+        misclassified_indices_test = None
 
     return final_test_score, np.array(params), misclassified_indices_test
 
 
-def GBM(data_train, data_labels_train, data_test, data_labels_test, test_indices):
+def GBM(
+    data_train,
+    data_labels_train,
+    data_test,
+    data_labels_test,
+    test_indices,
+    misclassed=True,
+):
 
     classifier = GradientBoostingClassifier(
         loss="log_loss",
@@ -137,13 +165,16 @@ def GBM(data_train, data_labels_train, data_test, data_labels_test, test_indices
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    misclassified_indices_test = [
-        index
-        for index, (pred_label, true_label) in zip(
-            test_indices, zip(predictions_test, data_labels_test)
-        )
-        if pred_label != true_label
-    ]
+    if misclassed:
+        misclassified_indices_test = [
+            index
+            for index, (pred_label, true_label) in zip(
+                test_indices, zip(predictions_test, data_labels_test)
+            )
+            if pred_label != true_label
+        ]
+    else:
+        misclassified_indices_test = None
 
     return (
         final_test_score,
@@ -152,7 +183,14 @@ def GBM(data_train, data_labels_train, data_test, data_labels_test, test_indices
     )
 
 
-def lasso(data_train, data_labels_train, data_test, data_labels_test, test_indices):
+def lasso(
+    data_train,
+    data_labels_train,
+    data_test,
+    data_labels_test,
+    test_indices,
+    misclassed=True,
+):
     classifier = LogisticRegression(
         penalty="l1",
         solver="liblinear",
@@ -167,18 +205,28 @@ def lasso(data_train, data_labels_train, data_test, data_labels_test, test_indic
 
     params = classifier.coef_[0]
 
-    misclassified_indices_test = [
-        index
-        for index, (pred_label, true_label) in zip(
-            test_indices, zip(predictions_test, data_labels_test)
-        )
-        if pred_label != true_label
-    ]
+    if misclassed:
+        misclassified_indices_test = [
+            index
+            for index, (pred_label, true_label) in zip(
+                test_indices, zip(predictions_test, data_labels_test)
+            )
+            if pred_label != true_label
+        ]
+    else:
+        misclassified_indices_test = None
 
     return final_test_score, np.array(params), misclassified_indices_test
 
 
-def NN(data_train, data_labels_train, data_test, data_labels_test, test_indices):
+def NN(
+    data_train,
+    data_labels_train,
+    data_test,
+    data_labels_test,
+    test_indices,
+    misclassed=True,
+):
     # Convert data to PyTorch tensors
     data_train = torch.tensor(data_train, dtype=torch.float32)
     data_labels_train = torch.tensor(data_labels_train, dtype=torch.float32)
@@ -190,7 +238,10 @@ def NN(data_train, data_labels_train, data_test, data_labels_test, test_indices)
         def __init__(self):
             super(NeuralNetwork, self).__init__()
             self.flatten = nn.Flatten()
-            self.fc1 = nn.Linear(64 * 64, 256)
+            if misclassed:
+                self.fc1 = nn.Linear(64 * 64, 256)
+            else:
+                self.fc1 = nn.Linear(256, 256)
             self.fc2 = nn.Linear(256, 64)
             self.fc3 = nn.Linear(64, 16)
             self.fc4 = nn.Linear(16, 1)
@@ -333,13 +384,16 @@ def NN(data_train, data_labels_train, data_test, data_labels_test, test_indices)
     # Compute the average saliency map
     avg_saliency = sum_saliency / count
 
-    misclassified_indices_test = [
-        index
-        for index, (pred_label, true_label) in zip(
-            test_indices, zip(predicted, data_labels_test)
-        )
-        if pred_label != true_label
-    ]
+    if misclassed:
+        misclassified_indices_test = [
+            index
+            for index, (pred_label, true_label) in zip(
+                test_indices, zip(predicted, data_labels_test)
+            )
+            if pred_label != true_label
+        ]
+    else:
+        misclassified_indices_test = None
 
     return (accuracy.item(), np.array(avg_saliency), misclassified_indices_test)
 
@@ -494,48 +548,54 @@ def plot_performance(scores):
 
 
 def plot_features(model_feature_importances):
-    _, _, data_test, _, _ = load_data()
-    # Append test images to the dictionary with specific keys
-    model_feature_importances["Test image 1"] = data_test[0]
-    model_feature_importances["Test image 2"] = data_test[1]
-    model_feature_importances["Test image 3"] = data_test[2]
+    _, _, data_test, data_labels, _ = load_data()
+
+    # Filter data based on labels
+    label0_data = data_test[data_labels == 0]
+    label1_data = data_test[data_labels == 1]
+
+    # Calculate average images for each label
+    if len(label0_data) > 0:
+        average_image0 = np.mean(label0_data, axis=0)
+        model_feature_importances["Average image Label Cat"] = average_image0
+
+    if len(label1_data) > 0:
+        average_image1 = np.mean(label1_data, axis=0)
+        model_feature_importances["Average image Label Dog"] = average_image1
+
+    model_feature_importances["Average image Label difference"] = abs(
+        average_image1 - average_image0
+    )
 
     num_models = len(model_feature_importances)
 
-    # Setup the matplotlib figure and axes, 3 rows and 3 columns
-    fig, axes = plt.subplots(3, 3, figsize=(15, 15))  # Adjust figsize as needed
+    # Setup the matplotlib figure and axes
+    cols = 3
+    rows = (num_models + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(15, 5 * rows))
 
-    # Flatten the axes array for easier iteration if there are more than one row and column
+    # Flatten the axes array for easier iteration
     axes = axes.flatten()
 
-    # Store a reference image for the colorbar, preferably not a test image
-    reference_image = None
+    # Normalize and plot each image with its own colorbar
+    for ax, (model_name, image_array) in zip(axes, model_feature_importances.items()):
+        # Normalize feature importance maps
+        if "Average" not in model_name:
+            image_array = np.abs(image_array) / np.sum(np.abs(image_array))
+        image_matrix = image_array.reshape(64, 64).T  # Assuming image shape of 64x64
 
-    # Iterate over the images and their axes to plot each image
-    for ax, (model_name, image_array) in zip(
-        axes, reversed(list(model_feature_importances.items()))
-    ):
-        # Ensure the image data is in NumPy array format
-        if isinstance(image_array, list):
-            image_array = np.array(image_array)
-
-        # Reshape the flat array to 64x64 and transpose it
-        image_matrix = image_array.reshape(64, 64).T
+        # Choose color map
+        cmap = "gray" if "Average" in model_name else "hot"
 
         # Display the image
-        cmap = "gray" if "Test image" in model_name else "hot"
         im = ax.imshow(image_matrix, cmap=cmap, aspect="auto")
         ax.set_title(model_name)
-        ax.axis("off")  # Turn off axis ticks and labels
+        ax.axis("off")
 
-        # Save the first non-test image reference for the colorbar
-        if reference_image is None and "Test image" not in model_name:
-            reference_image = im
-
-    # Add a colorbar using the reference image
-    if reference_image is not None:
-        cax = fig.add_axes([0.67, 0.01, 0.01, 0.305])  # Position for the colorbar
-        fig.colorbar(reference_image, cax=cax)
+        # Create a colorbar for each image subplot
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax)
 
     # Hide any unused axes
     for i in range(num_models, len(axes)):
@@ -608,7 +668,7 @@ def plot_misclassified_images():
     indices_sorted = np.argsort(accuracies)[::-1]
     image_shape = (64, 64)  # Define the shape of images
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
-    data_labels = np.loadtxt("data/CorrectLabels.csv", delimiter=",", skiprows=1)
+    data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
     for i in indices_sorted:
         actual_label = data_labels[i]
@@ -624,6 +684,168 @@ def plot_misclassified_images():
             f" Index: {i}, Predicted: {predicted_label}, Actual: {actual_label_text}, Error rate: {round(accuracies[i]/5,2)}"
         )
         plt.show()
+
+
+def load_data_split():
+    data_train, data_labels_train, data_test, data_labels_test, _ = load_data()
+    # plot_subimages(data_train[0].reshape(64, 64))
+
+    # Parameters
+    block_size = 16
+    num_blocks = 4
+
+    # Calculate the total number of blocks per image
+    total_blocks = num_blocks * num_blocks
+
+    # Prepare to collect blocks, adjusting to store flat blocks
+    blocks_train = np.empty(
+        (data_train.shape[0], total_blocks, block_size * block_size)
+    )
+    blocks_test = np.empty((data_test.shape[0], total_blocks, block_size * block_size))
+
+    # Iterate over each image in the training set
+    for img_index in range(data_train.shape[0]):
+        square_matrix_train = data_train[img_index].reshape(64, 64)
+        block_counter = 0
+        for i in range(num_blocks):
+            for j in range(num_blocks):
+                # Calculate the start and end indices for rows and columns
+                row_start = i * block_size
+                row_end = row_start + block_size
+                col_start = j * block_size
+                col_end = col_start + block_size
+
+                # Slice the block, flatten it, and add to the array
+                blocks_train[img_index, block_counter] = square_matrix_train[
+                    row_start:row_end, col_start:col_end
+                ].flatten()
+                block_counter += 1
+
+    # Iterate over each image in the test set
+    for img_index in range(data_test.shape[0]):
+        square_matrix_test = data_test[img_index].reshape(64, 64)
+        block_counter = 0
+        for i in range(num_blocks):
+            for j in range(num_blocks):
+                row_start = i * block_size
+                row_end = row_start + block_size
+                col_start = j * block_size
+                col_end = col_start + block_size
+
+                # Slice the block, flatten it, and add to the array
+                blocks_test[img_index, block_counter] = square_matrix_test[
+                    row_start:row_end, col_start:col_end
+                ].flatten()
+                block_counter += 1
+
+    scores_RF = np.zeros((16))
+    scores_GBM = np.zeros((16))
+    scores_NN = np.zeros((16))
+    scores_lasso = np.zeros((16))
+    scores_SVC = np.zeros((16))
+    for i in range(16):
+        print(f"block [{i+1}/{16}]")
+        current_block_train_data = blocks_train[:, i, :]
+        current_block_test_data = blocks_test[:, i, :]
+        scores_RF[i] = RF(
+            current_block_train_data,
+            data_labels_train,
+            current_block_test_data,
+            data_labels_test,
+            _,
+            misclassed=False,
+        )[0]
+        scores_GBM[i] = GBM(
+            current_block_train_data,
+            data_labels_train,
+            current_block_test_data,
+            data_labels_test,
+            _,
+            misclassed=False,
+        )[0]
+        NN_suppressed = suppress_print(NN)
+        scores_NN[i] = NN_suppressed(
+            current_block_train_data,
+            data_labels_train,
+            current_block_test_data,
+            data_labels_test,
+            _,
+            misclassed=False,
+        )[0]
+        scores_lasso[i] = lasso(
+            current_block_train_data,
+            data_labels_train,
+            current_block_test_data,
+            data_labels_test,
+            _,
+            misclassed=False,
+        )[0]
+        scores_SVC[i] = SVC_(
+            current_block_train_data,
+            data_labels_train,
+            current_block_test_data,
+            data_labels_test,
+            _,
+            misclassed=False,
+        )[0]
+
+    fig, axes = plt.subplots(
+        nrows=3, ncols=2, figsize=(10, 15)
+    )  # Adjust the layout and size as needed
+
+    # List of scores and titles
+    scores = [scores_RF, scores_GBM, scores_NN, scores_lasso, scores_SVC]
+    titles = [
+        "Heatmap of RF",
+        "Heatmap of GBM",
+        "Heatmap of NN",
+        "Heatmap of Lasso",
+        "Heatmap of SVC",
+    ]
+
+    # Create each subplot
+    for ax, score, title in zip(axes.flat, scores, titles):
+        heatmap = ax.imshow(score.reshape(4, 4).T, cmap="viridis", aspect="auto")
+        ax.set_title(title)
+        fig.colorbar(heatmap, ax=ax)  # Add a colorbar to each subplot within its axis
+
+    # If there's an extra subplot (odd number), hide it
+    if len(scores) < axes.size:
+        for i in range(len(scores), axes.size):
+            axes.flat[i].axis("off")
+
+    plt.tight_layout()  # Adjust subplots to fit into the figure area.
+    plt.show()
+
+
+def plot_subimages(original_image):
+    # Parameters
+    block_size = 16
+    num_blocks = 4
+
+    # Prepare to collect subimages
+    subimages = []
+
+    for i in range(num_blocks):
+        for j in range(num_blocks):
+            row_start = i * block_size
+            row_end = row_start + block_size
+            col_start = j * block_size
+            col_end = col_start + block_size
+
+            subimage = original_image[row_start:row_end, col_start:col_end]
+            subimages.append(subimage)
+
+    # Plot subimages in a grid
+    plt.figure(figsize=(10, 10))
+    for idx, subimage in enumerate(subimages):
+        plt.subplot(num_blocks, num_blocks, idx + 1)
+        plt.imshow(subimage, cmap="gray")
+        plt.title(f"Block {idx+1}")
+        plt.axis("off")
+
+    plt.tight_layout()
+    plt.show()
 
 
 def main(args):
@@ -713,6 +935,8 @@ def main(args):
         plot_misclassified_indices(misclassified_indices, test_indices_counter)
     if args.plot_misclassified_images:
         plot_misclassified_images()
+    if args.load_data_split:
+        load_data_split()
 
 
 if __name__ == "__main__":
@@ -734,6 +958,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--plot_misclassified_images", action="store_true", default=False
     )
+    parser.add_argument("--load_data_split", action="store_true", default=False)
 
     args = parser.parse_args()
     main(args)
