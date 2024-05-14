@@ -1149,6 +1149,24 @@ def cluster(num_clusters=2, transpose=False):
                 label_list.append(data_labels[j])
             corresponding.append(np.array(label_list))
 
+        zeroes_indicies = np.where(clusters == 0)[0]
+        ones_indicies = np.where(clusters == 1)[0]
+
+        plt.figure(figsize=(10, 7))
+
+        plt.subplot(2, 1, 1)
+        plt.imshow(data[zeroes_indicies[0]].reshape(64, 64).T, cmap='gray')
+        plt.title('Zeroes Index Example')
+        plt.axis('off')  # Remove x and y axis numbers
+
+        plt.subplot(2, 1, 2)
+        plt.imshow(data[ones_indicies[0]].reshape(64, 64).T, cmap='gray')
+        plt.title('Ones Index Example')
+        plt.axis('off')  # Remove x and y axis numbers
+
+        plt.show()
+
+        
         i = 0
         plot_matrix = np.zeros((2, num_clusters))
         for list_item in corresponding:
@@ -1168,12 +1186,13 @@ def cluster(num_clusters=2, transpose=False):
                     color="white",
                     fontsize=12,
                 )
-        plt.xticks([0, 1], ["0", "1"])
+
+        plt.xticks(range(10), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
         plt.yticks([0, 1], ["0", "1"])
 
         # Label the axes
-        plt.title("Confusion Matrix for two clusters")
-        plt.xlabel("Predicted Label")
+        plt.title("Confusion Matrix for clusters")
+        plt.xlabel("Cluster")
         plt.ylabel("True Label")
         plt.show()
 
