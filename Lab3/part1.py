@@ -798,6 +798,7 @@ def CV_block():
     # Load your data
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
     data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
+    data = StandardScaler().fit_transform(data)
 
     # Constants
     block_size = 16
@@ -1108,13 +1109,13 @@ def cluster():
     plt.show()
 
 
-def cluster(num_clusters = 2 , transpose = False):
+def cluster(num_clusters=2, transpose=False):
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
     data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
     data = StandardScaler().fit_transform(data)
 
-    if transpose:   #This is for the task 2e
+    if transpose:  # This is for the task 2e
         data_ew = data.T
         # Apply K-means clustering
         kmeans = KMeans(n_clusters=num_clusters, random_state=0)
@@ -1123,7 +1124,7 @@ def cluster(num_clusters = 2 , transpose = False):
 
         new_clusters = clusters.reshape(64, 64)
         new_clusters = np.rot90(new_clusters, k=-1)
-        
+
         image = data[0].reshape(64, 64)
         image = np.rot90(image, k=-1)
 
@@ -1134,12 +1135,12 @@ def cluster(num_clusters = 2 , transpose = False):
         plt.imshow(image, cmap="gray")
         plt.imshow(new_clusters, cmap="plasma", alpha=0.2)
         plt.show()
-    
-    else:   #This is for task 1c
+
+    else:  # This is for task 1c
         kmeans = KMeans(n_clusters=num_clusters)
         kmeans.fit(data)
         clusters = kmeans.predict(data)
-        
+
         corresponding = []
         for i in range(num_clusters):
             indices_list = np.where(clusters == i)[0]
@@ -1147,30 +1148,38 @@ def cluster(num_clusters = 2 , transpose = False):
             for j in indices_list:
                 label_list.append(data_labels[j])
             corresponding.append(np.array(label_list))
-        
+
         i = 0
         plot_matrix = np.zeros((2, num_clusters))
         for list_item in corresponding:
             plot_matrix[0][i] = np.sum(list_item == 0)
             plot_matrix[1][i] = np.sum(list_item == 1)
             i += 1
-        
 
-        plt.imshow(plot_matrix, cmap='viridis')
+        plt.imshow(plot_matrix, cmap="viridis")
         for i in range(plot_matrix.shape[0]):
             for j in range(plot_matrix.shape[1]):
-                plt.text(j, i, str(plot_matrix[i, j]), ha='center', va='center', color='white', fontsize=12)
-        plt.xticks([0, 1], ['0', '1'])
-        plt.yticks([0, 1], ['0', '1'])
+                plt.text(
+                    j,
+                    i,
+                    str(plot_matrix[i, j]),
+                    ha="center",
+                    va="center",
+                    color="white",
+                    fontsize=12,
+                )
+        plt.xticks([0, 1], ["0", "1"])
+        plt.yticks([0, 1], ["0", "1"])
 
         # Label the axes
         plt.title("Confusion Matrix for two clusters")
-        plt.xlabel('Predicted Label')
-        plt.ylabel('True Label')
+        plt.xlabel("Predicted Label")
+        plt.ylabel("True Label")
         plt.show()
-        
+
         correct_guess = np.max(plot_matrix, axis=0)
         print(np.sum(correct_guess) / np.sum(plot_matrix))
+
 
 def main(args):
 
