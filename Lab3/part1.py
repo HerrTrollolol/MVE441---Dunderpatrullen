@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 import io
-
+from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -793,6 +793,116 @@ def plot_misclassified_images():
         plt.show()
 
 
+def CV_block():
+    # Load your data
+    data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+    data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
+
+    # Constants
+    block_size = 16
+    num_blocks = 4
+    total_blocks = num_blocks**2
+    k = 5  # Number of folds in k-fold cross-validation
+
+    # Prepare the data in blocks
+    def prepare_blocks(data):
+        blocks = np.empty((data.shape[0], total_blocks, block_size * block_size))
+        for img_index in range(data.shape[0]):
+            square_matrix = data[img_index].reshape(64, 64)
+            block_counter = 0
+            for i in range(num_blocks):
+                for j in range(num_blocks):
+                    row_start = i * block_size
+                    col_start = j * block_size
+                    blocks[img_index, block_counter] = square_matrix[
+                        row_start : row_start + block_size,
+                        col_start : col_start + block_size,
+                    ].flatten()
+                    block_counter += 1
+        return blocks
+
+    blocks = prepare_blocks(data)
+
+    fig, axes = plt.subplots(nrows=num_blocks, ncols=num_blocks, figsize=(8, 8))
+
+    for i in range(num_blocks):
+        for j in range(num_blocks):
+            ax = axes[i, j]
+            block_index = i * num_blocks + j
+            block_image = blocks[5, block_index].reshape(block_size, block_size)
+            ax.imshow(block_image, cmap="gray", interpolation="none")
+            ax.axis("off")  # Turn off axis numbering
+
+    plt.tight_layout()
+    plt.show()
+
+    # Initialize scores
+    scores_methods = {
+        name: np.zeros((total_blocks, k))
+        for name in ["RF", "GBM", "NN", "Lasso", "SVC"]
+    }
+
+    kf = KFold(n_splits=k, shuffle=True, random_state=42)
+
+    for fold_index, (train_index, test_index) in enumerate(kf.split(data)):
+        print(f"Processing fold {fold_index + 1}/{k}")
+        for block_index in range(total_blocks):
+            X_train, X_test = (
+                blocks[train_index, block_index],
+                blocks[test_index, block_index],
+            )
+
+            y_train, y_test = data_labels[train_index], data_labels[test_index]
+
+            # RF
+            rf_score, _, _, _, _ = RF(X_train, y_train, X_test, y_test)
+            scores_methods["RF"][block_index, fold_index] = rf_score
+
+            # GBM
+            gbm_score, _, _, _, _ = GBM(X_train, y_train, X_test, y_test)
+            scores_methods["GBM"][block_index, fold_index] = gbm_score
+
+            # NN (modify for cross-validation)
+            NN_suppressed = suppress_print(NN)
+            nn_score, _, _, _, _ = NN_suppressed(X_train, y_train, X_test, y_test)
+            scores_methods["NN"][block_index, fold_index] = nn_score
+
+            # Lasso
+            lasso_score, _, _, _, _ = lasso(X_train, y_train, X_test, y_test)
+            scores_methods["Lasso"][block_index, fold_index] = lasso_score
+
+            # SVC
+            svc_score, _, _, _, _ = SVC_(X_train, y_train, X_test, y_test)
+            print(svc_score)
+            scores_methods["SVC"][block_index, fold_index] = svc_score
+
+    # Compute average scores across folds for each method
+    average_scores = {
+        name: np.mean(scores, axis=1) for name, scores in scores_methods.items()
+    }
+
+    # Visualization
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(12, 18))
+    titles = [
+        "Heatmap of RF",
+        "Heatmap of GBM",
+        "Heatmap of NN",
+        "Heatmap of Lasso",
+        "Heatmap of SVC",
+    ]
+    for ax, (name, scores) in zip(axes.flat, average_scores.items()):
+        heatmap = ax.imshow(scores.reshape(4, 4).T, cmap="viridis", aspect="auto")
+        ax.set_title(titles.pop(0))
+        fig.colorbar(heatmap, ax=ax)
+    # Hide the last subplot if it's not used
+    if len(average_scores) < axes.size:
+        for i in range(len(average_scores), axes.size):
+            axes.flat[i].axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+
 def load_data_split():
     scores_RF = np.zeros((16))
     scores_GBM = np.zeros((16))
@@ -800,7 +910,6 @@ def load_data_split():
     scores_lasso = np.zeros((16))
     scores_SVC = np.zeros((16))
     averages = 2
-    scores_total = np.zeros((16))
 
     for av in range(averages):
         print(f"average: [{av+1}/{averages}]")
@@ -893,6 +1002,14 @@ def load_data_split():
                 current_block_test_data,
                 data_labels_test,
             )[0]
+            print(
+                SVC_(
+                    current_block_train_data,
+                    data_labels_train,
+                    current_block_test_data,
+                    data_labels_test,
+                )[0]
+            )
 
         scores = [scores_RF, scores_GBM, scores_NN, scores_lasso, scores_SVC]
 
@@ -924,7 +1041,7 @@ def load_data_split():
             vmin=global_min,
         )
         ax.set_title(title)
-        fig.colorbar(heatmap, ax=ax)  # Add a colorbar to each subplot within its axis
+        fig.colorbar(heatmap, ax=ax)  # Add a colorbar to each subplot within its
 
     # If there's an extra subplot (odd number), hide it
     if len(scores) < axes.size:
@@ -967,6 +1084,7 @@ def plot_subimages(original_image):
 
 
 def cluster():
+    print("Hej")
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
     data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
@@ -1101,7 +1219,9 @@ def main(args):
     if args.plot_misclassified_images:
         plot_misclassified_images()  # plots missclassified images
     if args.load_data_split:
-        load_data_split()  # loads data split
+        # load_data_split()
+        CV_block()  # loads data split
+
     if args.confusion:
         plot_confusion_matrix(
             args.flip_data
