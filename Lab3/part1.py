@@ -687,107 +687,113 @@ def plot_misclassified_images():
 
 
 def load_data_split():
-    data_train, data_labels_train, data_test, data_labels_test, _ = load_data()
-    # plot_subimages(data_train[0].reshape(64, 64))
-
-    # Parameters
-    block_size = 16
-    num_blocks = 4
-
-    # Calculate the total number of blocks per image
-    total_blocks = num_blocks * num_blocks
-
-    # Prepare to collect blocks, adjusting to store flat blocks
-    blocks_train = np.empty(
-        (data_train.shape[0], total_blocks, block_size * block_size)
-    )
-    blocks_test = np.empty((data_test.shape[0], total_blocks, block_size * block_size))
-
-    # Iterate over each image in the training set
-    for img_index in range(data_train.shape[0]):
-        square_matrix_train = data_train[img_index].reshape(64, 64)
-        block_counter = 0
-        for i in range(num_blocks):
-            for j in range(num_blocks):
-                # Calculate the start and end indices for rows and columns
-                row_start = i * block_size
-                row_end = row_start + block_size
-                col_start = j * block_size
-                col_end = col_start + block_size
-
-                # Slice the block, flatten it, and add to the array
-                blocks_train[img_index, block_counter] = square_matrix_train[
-                    row_start:row_end, col_start:col_end
-                ].flatten()
-                block_counter += 1
-
-    # Iterate over each image in the test set
-    for img_index in range(data_test.shape[0]):
-        square_matrix_test = data_test[img_index].reshape(64, 64)
-        block_counter = 0
-        for i in range(num_blocks):
-            for j in range(num_blocks):
-                row_start = i * block_size
-                row_end = row_start + block_size
-                col_start = j * block_size
-                col_end = col_start + block_size
-
-                # Slice the block, flatten it, and add to the array
-                blocks_test[img_index, block_counter] = square_matrix_test[
-                    row_start:row_end, col_start:col_end
-                ].flatten()
-                block_counter += 1
-
     scores_RF = np.zeros((16))
     scores_GBM = np.zeros((16))
     scores_NN = np.zeros((16))
     scores_lasso = np.zeros((16))
     scores_SVC = np.zeros((16))
-    for i in range(16):
-        print(f"block [{i+1}/{16}]")
-        current_block_train_data = blocks_train[:, i, :]
-        current_block_test_data = blocks_test[:, i, :]
-        scores_RF[i] = RF(
-            current_block_train_data,
-            data_labels_train,
-            current_block_test_data,
-            data_labels_test,
-            _,
-            misclassed=False,
-        )[0]
-        scores_GBM[i] = GBM(
-            current_block_train_data,
-            data_labels_train,
-            current_block_test_data,
-            data_labels_test,
-            _,
-            misclassed=False,
-        )[0]
-        NN_suppressed = suppress_print(NN)
-        scores_NN[i] = NN_suppressed(
-            current_block_train_data,
-            data_labels_train,
-            current_block_test_data,
-            data_labels_test,
-            _,
-            misclassed=False,
-        )[0]
-        scores_lasso[i] = lasso(
-            current_block_train_data,
-            data_labels_train,
-            current_block_test_data,
-            data_labels_test,
-            _,
-            misclassed=False,
-        )[0]
-        scores_SVC[i] = SVC_(
-            current_block_train_data,
-            data_labels_train,
-            current_block_test_data,
-            data_labels_test,
-            _,
-            misclassed=False,
-        )[0]
+    averages = 10
+    for av in range(averages):
+        print(f"average: [{av+1}/{averages}]")
+
+        data_train, data_labels_train, data_test, data_labels_test, _ = load_data()
+        # plot_subimages(data_train[0].reshape(64, 64))
+
+        # Parameters
+        block_size = 16
+        num_blocks = 4
+
+        # Calculate the total number of blocks per image
+        total_blocks = num_blocks * num_blocks
+
+        # Prepare to collect blocks, adjusting to store flat blocks
+        blocks_train = np.empty(
+            (data_train.shape[0], total_blocks, block_size * block_size)
+        )
+        blocks_test = np.empty(
+            (data_test.shape[0], total_blocks, block_size * block_size)
+        )
+
+        # Iterate over each image in the training set
+        for img_index in range(data_train.shape[0]):
+            square_matrix_train = data_train[img_index].reshape(64, 64)
+            block_counter = 0
+            for i in range(num_blocks):
+                for j in range(num_blocks):
+                    # Calculate the start and end indices for rows and columns
+                    row_start = i * block_size
+                    row_end = row_start + block_size
+                    col_start = j * block_size
+                    col_end = col_start + block_size
+
+                    # Slice the block, flatten it, and add to the array
+                    blocks_train[img_index, block_counter] = square_matrix_train[
+                        row_start:row_end, col_start:col_end
+                    ].flatten()
+                    block_counter += 1
+
+        # Iterate over each image in the test set
+        for img_index in range(data_test.shape[0]):
+            square_matrix_test = data_test[img_index].reshape(64, 64)
+            block_counter = 0
+            for i in range(num_blocks):
+                for j in range(num_blocks):
+                    row_start = i * block_size
+                    row_end = row_start + block_size
+                    col_start = j * block_size
+                    col_end = col_start + block_size
+
+                    # Slice the block, flatten it, and add to the array
+                    blocks_test[img_index, block_counter] = square_matrix_test[
+                        row_start:row_end, col_start:col_end
+                    ].flatten()
+                    block_counter += 1
+
+        for i in range(16):
+            print(f"block [{i+1}/{16}]")
+            current_block_train_data = blocks_train[:, i, :]
+            current_block_test_data = blocks_test[:, i, :]
+            scores_RF[i] += RF(
+                current_block_train_data,
+                data_labels_train,
+                current_block_test_data,
+                data_labels_test,
+                _,
+                misclassed=False,
+            )[0]
+            scores_GBM[i] += GBM(
+                current_block_train_data,
+                data_labels_train,
+                current_block_test_data,
+                data_labels_test,
+                _,
+                misclassed=False,
+            )[0]
+            NN_suppressed = suppress_print(NN)
+            scores_NN[i] += NN_suppressed(
+                current_block_train_data,
+                data_labels_train,
+                current_block_test_data,
+                data_labels_test,
+                _,
+                misclassed=False,
+            )[0]
+            scores_lasso[i] += lasso(
+                current_block_train_data,
+                data_labels_train,
+                current_block_test_data,
+                data_labels_test,
+                _,
+                misclassed=False,
+            )[0]
+            scores_SVC[i] += SVC_(
+                current_block_train_data,
+                data_labels_train,
+                current_block_test_data,
+                data_labels_test,
+                _,
+                misclassed=False,
+            )[0]
 
     fig, axes = plt.subplots(
         nrows=3, ncols=2, figsize=(10, 15)
@@ -795,6 +801,8 @@ def load_data_split():
 
     # List of scores and titles
     scores = [scores_RF, scores_GBM, scores_NN, scores_lasso, scores_SVC]
+    global_max = max(np.max(score) for score in scores) / averages
+    global_min = max(np.min(score) for score in scores) / averages
     titles = [
         "Heatmap of RF",
         "Heatmap of GBM",
@@ -805,7 +813,13 @@ def load_data_split():
 
     # Create each subplot
     for ax, score, title in zip(axes.flat, scores, titles):
-        heatmap = ax.imshow(score.reshape(4, 4).T, cmap="viridis", aspect="auto")
+        heatmap = ax.imshow(
+            score.reshape(4, 4).T / averages,
+            cmap="viridis",
+            aspect="auto",
+            vmax=global_max,
+            vmin=global_min,
+        )
         ax.set_title(title)
         fig.colorbar(heatmap, ax=ax)  # Add a colorbar to each subplot within its axis
 
@@ -842,6 +856,7 @@ def plot_subimages(original_image):
         plt.subplot(num_blocks, num_blocks, idx + 1)
         plt.imshow(subimage, cmap="gray")
         plt.title(f"Block {idx+1}")
+
         plt.axis("off")
 
     plt.tight_layout()
