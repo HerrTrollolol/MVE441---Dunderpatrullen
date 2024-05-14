@@ -20,6 +20,7 @@ from collections import Counter
 from itertools import islice
 from sklearn.cluster import KMeans
 
+
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # from tensorflow.keras import layers, models
@@ -1107,6 +1108,62 @@ def cluster():
     plt.show()
 
 
+def cluster(num_clusters = 2 , transpose = False):
+    data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+    data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
+
+    data = StandardScaler().fit_transform(data)
+
+    if transpose:   #This is for the task 2e
+        data_ew = data.T
+        # Apply K-means clustering
+        kmeans = KMeans(n_clusters=num_clusters, random_state=0)
+        kmeans.fit(data_ew)
+        clusters = kmeans.predict(data_ew)
+
+        new_clusters = clusters.reshape(64, 64)
+        new_clusters = np.rot90(new_clusters, k=-1)
+        
+        image = data[0].reshape(64, 64)
+        image = np.rot90(image, k=-1)
+
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.imshow(image, cmap="gray")
+        plt.subplot(1, 2, 2)
+        plt.imshow(image, cmap="gray")
+        plt.imshow(new_clusters, cmap="plasma", alpha=0.2)
+        plt.show()
+    
+    else:   #This is for task 1c
+        kmeans = KMeans(n_clusters=num_clusters)
+        kmeans.fit(data)
+        clusters = kmeans.predict(data)
+        
+        corresponding = []
+        for i in range(num_clusters):
+            indices_list = np.where(clusters == i)[0]
+            label_list = []
+            for j in indices_list:
+                label_list.append(data_labels[j])
+            corresponding.append(np.array(label_list))
+        
+        i = 0
+        plot_matrix = np.zeros((2, num_clusters))
+        for list_item in corresponding:
+            plot_matrix[0][i] = np.sum(list_item == 0)
+            plot_matrix[1][i] = np.sum(list_item == 1)
+            i += 1
+        
+        plt.imshow(plot_matrix, cmap='viridis')
+        for i in range(plot_matrix.shape[0]):
+            for j in range(plot_matrix.shape[1]):
+                plt.text(j, i, str(plot_matrix[i, j]), ha='center', va='center', color='white', fontsize=12)
+        plt.show()
+        
+        correct_guess = np.max(plot_matrix, axis=0)
+        print(np.sum(correct_guess) / np.sum(plot_matrix))
+
 def main(args):
 
     scores = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
@@ -1221,13 +1278,13 @@ def main(args):
     if args.load_data_split:
         # load_data_split()
         CV_block()  # loads data split
+    if args.cluster:
+        cluster(args.num_clusters, args.transpose_cluster_data)
 
     if args.confusion:
         plot_confusion_matrix(
             args.flip_data
         )  # if args.confusion == True, then plots confusion matrix
-    if args.cluster:
-        cluster()
 
 
 if __name__ == "__main__":
@@ -1253,6 +1310,9 @@ if __name__ == "__main__":
     parser.add_argument("--confusion", action="store_true", default=False)
     parser.add_argument("--flip_data", action="store_true", default=False)
     parser.add_argument("--cluster", action="store_true", default=False)
+    parser.add_argument("--cluster", action="store_true", default=False)
+    parser.add_argument("--num_clusters", type=int, default=2)
+    parser.add_argument("--transpose_cluster_data", action="store_true", default=False)
 
     args = parser.parse_args()
     main(args)
