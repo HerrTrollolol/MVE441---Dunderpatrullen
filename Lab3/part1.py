@@ -1155,10 +1155,18 @@ def cluster(num_clusters = 2 , transpose = False):
             plot_matrix[1][i] = np.sum(list_item == 1)
             i += 1
         
+
         plt.imshow(plot_matrix, cmap='viridis')
         for i in range(plot_matrix.shape[0]):
             for j in range(plot_matrix.shape[1]):
                 plt.text(j, i, str(plot_matrix[i, j]), ha='center', va='center', color='white', fontsize=12)
+        plt.xticks([0, 1], ['0', '1'])
+        plt.yticks([0, 1], ['0', '1'])
+
+        # Label the axes
+        plt.title("Confusion Matrix for two clusters")
+        plt.xlabel('Predicted Label')
+        plt.ylabel('True Label')
         plt.show()
         
         correct_guess = np.max(plot_matrix, axis=0)
@@ -1310,7 +1318,7 @@ if __name__ == "__main__":
     parser.add_argument("--confusion", action="store_true", default=False)
     parser.add_argument("--flip_data", action="store_true", default=False)
     parser.add_argument("--cluster", action="store_true", default=False)
-    parser.add_argument("--cluster", action="store_true", default=False)
+
     parser.add_argument("--num_clusters", type=int, default=2)
     parser.add_argument("--transpose_cluster_data", action="store_true", default=False)
 
