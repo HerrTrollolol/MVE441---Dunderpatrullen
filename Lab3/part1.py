@@ -18,6 +18,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 from collections import Counter
 from itertools import islice
+from sklearn.cluster import KMeans
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -42,7 +43,7 @@ def suppress_print(func):
     return wrapper
 
 
-def load_data():
+def load_data(flip_data=False):
 
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
     data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
@@ -51,10 +52,42 @@ def load_data():
     indices = np.arange(len(data))
 
     data_train, data_test, data_labels_train, data_labels_test, _, indices_test = (
-        train_test_split(data, data_labels, indices, test_size=0.2)
+        train_test_split(
+            data, data_labels, indices, test_size=0.2, stratify=data_labels
+        )
     )
 
-    return data_train, data_labels_train, data_test, data_labels_test, indices_test
+    if flip_data:
+        # Determine the number of images to flip
+        num_images_to_flip_train = len(data_train) // 2
+        num_images_to_flip_test = len(data_test) // 2
+
+        # Randomly select indices of images to flip in the training set
+        flip_indices_train = np.random.choice(
+            len(data_train), num_images_to_flip_train, replace=False
+        )
+
+        # Turn selected training images upside down by reversing their order
+        data_train[flip_indices_train] = np.flip(data_train[flip_indices_train], axis=1)
+
+        # Randomly select indices of images to flip in the test set
+        flip_indices_test = np.random.choice(
+            len(data_test), num_images_to_flip_test, replace=False
+        )
+
+        # Turn selected test images upside down by reversing their order
+        data_test[flip_indices_test] = np.flip(data_test[flip_indices_test], axis=1)
+    else:
+        flip_indices_test = None
+
+    return (
+        data_train,
+        data_labels_train,
+        data_test,
+        data_labels_test,
+        indices_test,
+        flip_indices_test,
+    )
 
 
 def RF(
@@ -62,8 +95,8 @@ def RF(
     data_labels_train,
     data_test,
     data_labels_test,
-    test_indices,
-    misclassed=True,
+    test_indices=None,
+    flip_indices_test=None,
 ):
 
     classifier = RandomForestClassifier(
@@ -83,7 +116,7 @@ def RF(
     final_train_score = np.sum(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
-    if misclassed:
+    if test_indices is not None:
         misclassified_indices_test = [
             index
             for index, (pred_label, true_label) in zip(
@@ -91,6 +124,15 @@ def RF(
             )
             if pred_label != true_label
         ]
+
+        if flip_indices_test is not None:
+            true_predictions = predictions_test == data_labels_test
+            counter = 0
+            for i in flip_indices_test:
+                if not true_predictions[i]:
+                    counter += 1
+            print(counter / len(misclassified_indices_test))
+
     else:
         misclassified_indices_test = None
 
@@ -98,6 +140,8 @@ def RF(
         final_test_score,
         np.array(classifier.feature_importances_),
         misclassified_indices_test,
+        data_labels_test,
+        predictions_test,
     )
 
 
@@ -106,9 +150,8 @@ def SVC_(
     data_labels_train,
     data_test,
     data_labels_test,
-    test_indices,
+    test_indices=None,
     rbf=True,
-    misclassed=True,
 ):
     if rbf:
         classifier = SVC(C=10.0, kernel="rbf", gamma=0.0005)
@@ -125,7 +168,7 @@ def SVC_(
     else:
         params = []
 
-    if misclassed:
+    if test_indices is not None:
         misclassified_indices_test = [
             index
             for index, (pred_label, true_label) in zip(
@@ -136,7 +179,13 @@ def SVC_(
     else:
         misclassified_indices_test = None
 
-    return final_test_score, np.array(params), misclassified_indices_test
+    return (
+        final_test_score,
+        np.array(params),
+        misclassified_indices_test,
+        data_labels_test,
+        predictions_test,
+    )
 
 
 def GBM(
@@ -144,8 +193,7 @@ def GBM(
     data_labels_train,
     data_test,
     data_labels_test,
-    test_indices,
-    misclassed=True,
+    test_indices=None,
 ):
 
     classifier = GradientBoostingClassifier(
@@ -165,7 +213,7 @@ def GBM(
         classifier.predict(data_train) == data_labels_train
     ) / len(data_train)
 
-    if misclassed:
+    if test_indices is not None:
         misclassified_indices_test = [
             index
             for index, (pred_label, true_label) in zip(
@@ -180,6 +228,8 @@ def GBM(
         final_test_score,
         np.array(classifier.feature_importances_),
         misclassified_indices_test,
+        data_labels_test,
+        predictions_test,
     )
 
 
@@ -188,8 +238,7 @@ def lasso(
     data_labels_train,
     data_test,
     data_labels_test,
-    test_indices,
-    misclassed=True,
+    test_indices=None,
 ):
     classifier = LogisticRegression(
         penalty="l1",
@@ -205,7 +254,7 @@ def lasso(
 
     params = classifier.coef_[0]
 
-    if misclassed:
+    if test_indices is not None:
         misclassified_indices_test = [
             index
             for index, (pred_label, true_label) in zip(
@@ -216,7 +265,13 @@ def lasso(
     else:
         misclassified_indices_test = None
 
-    return final_test_score, np.array(params), misclassified_indices_test
+    return (
+        final_test_score,
+        np.array(params),
+        misclassified_indices_test,
+        data_labels_test,
+        predictions_test,
+    )
 
 
 def NN(
@@ -224,8 +279,7 @@ def NN(
     data_labels_train,
     data_test,
     data_labels_test,
-    test_indices,
-    misclassed=True,
+    test_indices=None,
 ):
     # Convert data to PyTorch tensors
     data_train = torch.tensor(data_train, dtype=torch.float32)
@@ -238,7 +292,7 @@ def NN(
         def __init__(self):
             super(NeuralNetwork, self).__init__()
             self.flatten = nn.Flatten()
-            if misclassed:
+            if data_train.shape[1] == 64 * 64:
                 self.fc1 = nn.Linear(64 * 64, 256)
             else:
                 self.fc1 = nn.Linear(256, 256)
@@ -384,7 +438,7 @@ def NN(
     # Compute the average saliency map
     avg_saliency = sum_saliency / count
 
-    if misclassed:
+    if test_indices is not None:
         misclassified_indices_test = [
             index
             for index, (pred_label, true_label) in zip(
@@ -395,11 +449,17 @@ def NN(
     else:
         misclassified_indices_test = None
 
-    return (accuracy.item(), np.array(avg_saliency), misclassified_indices_test)
+    return (
+        accuracy.item(),
+        np.array(avg_saliency),
+        misclassified_indices_test,
+        data_labels_test,
+        predicted,
+    )
 
 
 def CV_kernel():
-    data_train, data_labels_train, _, _, _ = load_data()
+    data_train, data_labels_train, _, _, _, _ = load_data()
     alphas = [10**i for i in range(0, 5)]
     gammas = np.round(np.arange(0.00001, 0.001, 0.0001), 5)
     scores = np.zeros((len(alphas), len(gammas)))
@@ -450,7 +510,7 @@ def CV_kernel():
 
 
 def CV_lasso():
-    data_train, data_labels_train, _, _, _ = load_data()
+    data_train, data_labels_train, _, _, _, _ = load_data()
     alphas = np.arange(0.1, 30.0, 0.1).tolist()
     scores = np.zeros(len(alphas))
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -491,24 +551,70 @@ def CV_lasso():
     return scores
 
 
-def plot_confusion_matrix(y_true, y_predicted):
-    cm = confusion_matrix(y_true, y_predicted)
+def plot_confusion_matrix(flip_data=False):
+    averages = 10
+    classifiers = {
+        "RF": ([], []),
+        "GBM": ([], []),
+        "SVC": ([], []),
+        "NN": ([], []),
+        "Lasso": ([], []),
+    }
 
-    plt.figure(figsize=(8, 6))
+    for av in range(averages):
+        print(f"average [{av+1}/{averages}]")
+        data_train, data_labels_train, data_test, data_labels_test, _, _ = load_data(
+            flip_data
+        )
+        _, _, _, RF_true, RF_pred = RF(
+            data_train, data_labels_train, data_test, data_labels_test
+        )
+        classifiers["RF"][0].extend(RF_true)
+        classifiers["RF"][1].extend(RF_pred)
+        _, _, _, GBM_true, GBM_pred = GBM(
+            data_train,
+            data_labels_train,
+            data_test,
+            data_labels_test,
+        )
+        classifiers["GBM"][0].extend(GBM_true)
+        classifiers["GBM"][1].extend(GBM_pred)
+        _, _, _, SVC_true, SVC_pred = SVC_(
+            data_train, data_labels_train, data_test, data_labels_test
+        )
+        classifiers["SVC"][0].extend(SVC_true)
+        classifiers["SVC"][1].extend(SVC_pred)
+        _, _, _, NN_true, NN_pred = suppress_print(NN)(
+            data_train, data_labels_train, data_test, data_labels_test
+        )
+        classifiers["NN"][0].extend(NN_true)
+        classifiers["NN"][1].extend(NN_pred)
+        _, _, _, Lasso_true, Lasso_pred = lasso(
+            data_train, data_labels_train, data_test, data_labels_test
+        )
+        classifiers["Lasso"][0].extend(Lasso_true)
+        classifiers["Lasso"][1].extend(Lasso_pred)
+
+    # Plotting all confusion matrices
+    plt.figure(figsize=(15, 10))
     sns.set_theme(font_scale=1.2)
-    sns.heatmap(
-        cm,
-        annot=True,
-        fmt="d",
-        cmap="Blues",
-        annot_kws={"size": 14},
-        xticklabels=["Class 0 - Catty", "Class 1 - Doggie"],
-        yticklabels=["Class 0 - Catty", "Class 1 - Doggie"],
-    )
+    for idx, (name, (true, pred)) in enumerate(classifiers.items(), 1):
+        cm = confusion_matrix(true, pred)
+        plt.subplot(2, 3, idx)
+        sns.heatmap(
+            cm,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            annot_kws={"size": 12},
+            xticklabels=["Class 0 - Catty", "Class 1 - Doggie"],
+            yticklabels=["Class 0 - Catty", "Class 1 - Doggie"],
+        )
+        plt.title(f"{name} Confusion Matrix")
+        plt.xlabel("Predicted Labels")
+        plt.ylabel("True Labels")
 
-    plt.xlabel("Predicted Labels")
-    plt.ylabel("True Labels")
-    plt.title("Confusion Matrix")
+    plt.tight_layout()
     plt.show()
 
 
@@ -547,8 +653,8 @@ def plot_performance(scores):
     plt.show()
 
 
-def plot_features(model_feature_importances):
-    _, _, data_test, data_labels, _ = load_data()
+def plot_features(model_feature_importances, flip_data):
+    _, _, data_test, data_labels, _, _, _ = load_data(flip_data)
 
     # Filter data based on labels
     label0_data = data_test[data_labels == 0]
@@ -606,6 +712,7 @@ def plot_features(model_feature_importances):
 
 
 def plot_misclassified_indices(misclassified_indices, test_indices_counter):
+    print(misclassified_indices)
     classifiers = list(misclassified_indices.keys())
     color_map = plt.get_cmap("tab10")
     bar_width = 0.6
@@ -692,11 +799,13 @@ def load_data_split():
     scores_NN = np.zeros((16))
     scores_lasso = np.zeros((16))
     scores_SVC = np.zeros((16))
-    averages = 10
+    averages = 2
+    scores_total = np.zeros((16))
+
     for av in range(averages):
         print(f"average: [{av+1}/{averages}]")
 
-        data_train, data_labels_train, data_test, data_labels_test, _ = load_data()
+        data_train, data_labels_train, data_test, data_labels_test, _, _ = load_data()
         # plot_subimages(data_train[0].reshape(64, 64))
 
         # Parameters
@@ -758,16 +867,12 @@ def load_data_split():
                 data_labels_train,
                 current_block_test_data,
                 data_labels_test,
-                _,
-                misclassed=False,
             )[0]
             scores_GBM[i] += GBM(
                 current_block_train_data,
                 data_labels_train,
                 current_block_test_data,
                 data_labels_test,
-                _,
-                misclassed=False,
             )[0]
             NN_suppressed = suppress_print(NN)
             scores_NN[i] += NN_suppressed(
@@ -775,40 +880,38 @@ def load_data_split():
                 data_labels_train,
                 current_block_test_data,
                 data_labels_test,
-                _,
-                misclassed=False,
             )[0]
             scores_lasso[i] += lasso(
                 current_block_train_data,
                 data_labels_train,
                 current_block_test_data,
                 data_labels_test,
-                _,
-                misclassed=False,
             )[0]
             scores_SVC[i] += SVC_(
                 current_block_train_data,
                 data_labels_train,
                 current_block_test_data,
                 data_labels_test,
-                _,
-                misclassed=False,
             )[0]
 
+        scores = [scores_RF, scores_GBM, scores_NN, scores_lasso, scores_SVC]
+
     fig, axes = plt.subplots(
-        nrows=3, ncols=2, figsize=(10, 15)
+        nrows=3, ncols=3, figsize=(10, 15)
     )  # Adjust the layout and size as needed
 
     # List of scores and titles
-    scores = [scores_RF, scores_GBM, scores_NN, scores_lasso, scores_SVC]
+
     global_max = max(np.max(score) for score in scores) / averages
     global_min = max(np.min(score) for score in scores) / averages
+    scores.append(np.mean(scores))
     titles = [
         "Heatmap of RF",
         "Heatmap of GBM",
         "Heatmap of NN",
         "Heatmap of Lasso",
         "Heatmap of SVC",
+        "Heatmap total",
     ]
 
     # Create each subplot
@@ -833,7 +936,7 @@ def load_data_split():
 
 
 def plot_subimages(original_image):
-    # Parameters
+    # Parameter
     block_size = 16
     num_blocks = 4
 
@@ -863,6 +966,29 @@ def plot_subimages(original_image):
     plt.show()
 
 
+def cluster():
+    data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+    data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
+
+    data = StandardScaler().fit_transform(data)
+
+    data_transposed = data.T
+    print(data_transposed.shape)
+
+    # Choose the number of clusters
+    num_clusters = 2
+
+    # Apply K-means clustering
+    kmeans = KMeans(n_clusters=num_clusters, random_state=0)
+    kmeans.fit(data_transposed)
+    clusters = kmeans.predict(data_transposed)
+
+    new_clusters = clusters.reshape(64, 64)
+
+    plt.imshow(new_clusters, cmap="gray")
+    plt.show()
+
+
 def main(args):
 
     scores = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
@@ -872,13 +998,23 @@ def main(args):
 
     averages = 10 if (args.plot_performance or args.plot_misclassified_indices) else 1
     for i in range(averages):
-        data_train, data_labels_train, data_test, data_labels_test, test_indices = (
-            load_data()
-        )
+        (
+            data_train,
+            data_labels_train,
+            data_test,
+            data_labels_test,
+            test_indices,
+            flip_indices_test,
+        ) = load_data(args.flip_data)
         test_indices_counter.extend(test_indices)
         if "RF" in args.classifier:
-            RF_score, feature_importance, misclassified_indices_test = RF(
-                data_train, data_labels_train, data_test, data_labels_test, test_indices
+            RF_score, feature_importance, misclassified_indices_test, _, _ = RF(
+                data_train,
+                data_labels_train,
+                data_test,
+                data_labels_test,
+                test_indices,
+                flip_indices_test,
             )
             scores["RF"].append(RF_score)
             feature_importances["RF"] = feature_importance
@@ -886,8 +1022,12 @@ def main(args):
             print(f"RF iteration [{i+1}/{averages}] Done")
 
         if "GBM" in args.classifier:
-            GBM_score, feature_importance, misclassified_indices_test = GBM(
-                data_train, data_labels_train, data_test, data_labels_test, test_indices
+            GBM_score, feature_importance, misclassified_indices_test, _, _ = GBM(
+                data_train,
+                data_labels_train,
+                data_test,
+                data_labels_test,
+                test_indices,
             )
             scores["GBM"].append(GBM_score)
             feature_importances["GBM"] = feature_importance
@@ -896,8 +1036,14 @@ def main(args):
 
         if "NN" in args.classifier:
             NN_suppressed = suppress_print(NN)
-            NN_score, feature_importance, misclassified_indices_test = NN_suppressed(
-                data_train, data_labels_train, data_test, data_labels_test, test_indices
+            NN_score, feature_importance, misclassified_indices_test, _, _ = (
+                NN_suppressed(
+                    data_train,
+                    data_labels_train,
+                    data_test,
+                    data_labels_test,
+                    test_indices,
+                )
             )
             scores["NN"].append(NN_score)
             feature_importances["NN"] = feature_importance
@@ -906,8 +1052,12 @@ def main(args):
             print(f"NN iteration [{i+1}/{averages}] Done")
 
         if "LASSO" in args.classifier:
-            Lasso_score, feature_importance, misclassified_indices_test = lasso(
-                data_train, data_labels_train, data_test, data_labels_test, test_indices
+            Lasso_score, feature_importance, misclassified_indices_test, _, _ = lasso(
+                data_train,
+                data_labels_train,
+                data_test,
+                data_labels_test,
+                test_indices,
             )
             scores["LASSO"].append(Lasso_score)
             feature_importances["LASSO"] = feature_importance
@@ -915,7 +1065,7 @@ def main(args):
             print(f"LASSO iteration [{i+1}/{averages}] Done")
 
         if "SVC" in args.classifier:
-            SVC_score, _, misclassified_indices_test = SVC_(
+            SVC_score, _, misclassified_indices_test, _, _ = SVC_(
                 data_train,
                 data_labels_train,
                 data_test,
@@ -923,7 +1073,7 @@ def main(args):
                 test_indices,
                 rbf=True,
             )
-            _, feature_importance, _ = SVC_(
+            _, feature_importance, _, _, _ = SVC_(
                 data_train,
                 data_labels_train,
                 data_test,
@@ -945,13 +1095,19 @@ def main(args):
     if args.plot_performance:
         plot_performance(scores)
     if args.plot_features:
-        plot_features(feature_importances)
+        plot_features(feature_importances, args.flip_data)  #
     if args.plot_misclassified_indices:
         plot_misclassified_indices(misclassified_indices, test_indices_counter)
     if args.plot_misclassified_images:
-        plot_misclassified_images()
+        plot_misclassified_images()  # plots missclassified images
     if args.load_data_split:
-        load_data_split()
+        load_data_split()  # loads data split
+    if args.confusion:
+        plot_confusion_matrix(
+            args.flip_data
+        )  # if args.confusion == True, then plots confusion matrix
+    if args.cluster:
+        cluster()
 
 
 if __name__ == "__main__":
@@ -974,6 +1130,9 @@ if __name__ == "__main__":
         "--plot_misclassified_images", action="store_true", default=False
     )
     parser.add_argument("--load_data_split", action="store_true", default=False)
+    parser.add_argument("--confusion", action="store_true", default=False)
+    parser.add_argument("--flip_data", action="store_true", default=False)
+    parser.add_argument("--cluster", action="store_true", default=False)
 
     args = parser.parse_args()
     main(args)
