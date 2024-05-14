@@ -1207,7 +1207,7 @@ def main(args):
     misclassified_indices = {"RF": [], "GBM": [], "NN": [], "LASSO": [], "SVC": []}
     test_indices_counter = []
 
-    averages = 10 if (args.plot_performance or args.plot_misclassified_indices) else 1
+    averages = 100 if (args.plot_performance or args.plot_misclassified_indices) else 1
     for i in range(averages):
         (
             data_train,
