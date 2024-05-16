@@ -20,6 +20,9 @@ from collections import Counter
 from itertools import islice
 from matplotlib.patches import Rectangle
 from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import adjusted_rand_score
+from sklearn.decomposition import PCA
 
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -1086,27 +1089,118 @@ def plot_subimages(original_image):
     plt.show()
 
 
-def cluster():
-    print("Hej")
+def cluster_2_get_k():
+    # Load the data
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
     data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
+    # Standardize the data
     data = StandardScaler().fit_transform(data)
 
-    data_transposed = data.T
-    print(data_transposed.shape)
+    # Define a range for the number of clusters
+    num_clusters = range(2, 10)
+    ari_scores = []
 
-    # Choose the number of clusters
-    num_clusters = 2
+    # Perform Gaussian Mixture Model clustering for different numbers of clusters
+    for k in num_clusters:
+        print(f"cluster [{k}/{max(num_clusters)}]")
+        ari_runs = []
+        for _ in range(1):  # Repeat the clustering 10 times for each k
+            gmm = GaussianMixture(n_components=k)
+            gmm.fit(data)
+            cluster_labels = gmm.predict(data)
+            ari = adjusted_rand_score(data_labels, cluster_labels)
+            ari_runs.append(ari)
+        # Compute the average ARI score for the current number of clusters
+        avg_ari = np.mean(ari_runs)
+        ari_scores.append(avg_ari)
 
-    # Apply K-means clustering
-    kmeans = KMeans(n_clusters=num_clusters, random_state=0)
-    kmeans.fit(data_transposed)
-    clusters = kmeans.predict(data_transposed)
+    # Plot the ARI scores
+    plt.plot(num_clusters, ari_scores, marker="o")
+    plt.xlabel("Number of Clusters")
+    plt.ylabel("Adjusted Rand Index (ARI)")
+    plt.title(
+        "Impact of Number of Clusters on Agreement with Class Labels using GMM (Averaged over 10 runs)"
+    )
+    plt.grid(True)
+    plt.show()
 
-    new_clusters = clusters.reshape(64, 64)
 
-    plt.imshow(new_clusters, cmap="gray")
+def cluster_2_char():
+    # Load the data
+    data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+
+    # Standardize the data
+    scaler = StandardScaler()
+    data = scaler.fit_transform(data)
+
+    # Define the optimal number of clusters
+    optimal_clusters = 5
+
+    # Perform Gaussian Mixture Model clustering
+    gmm = GaussianMixture(n_components=optimal_clusters, random_state=0)
+    gmm.fit(data)
+    cluster_labels = gmm.predict(data)
+
+    # Visualize the clusters using PCA
+    pca = PCA(n_components=2)
+    reduced_data = pca.fit_transform(data)
+    plt.scatter(
+        reduced_data[:, 0],
+        reduced_data[:, 1],
+        c=cluster_labels,
+        cmap="viridis",
+        marker="o",
+    )
+    plt.xlabel("PCA Component 1")
+    plt.ylabel("PCA Component 2")
+    plt.title(f"Clusters visualized with PCA (k={optimal_clusters})")
+    plt.colorbar()
+    plt.show()
+
+    pca.fit(data)
+    components = pca.components_
+
+    # Reshape the first two principal components to 64x64 images
+    pc1_image = components[0].reshape(64, 64)
+    pc2_image = components[1].reshape(64, 64)
+
+    # Plot the first two principal components as images
+    plt.figure(figsize=(12, 6))
+
+    # Plot PC1
+    plt.subplot(1, 2, 1)
+    plt.imshow(pc1_image.T, cmap="gray")
+    plt.title("First Principal Component (PC1)")
+    plt.colorbar()
+
+    # Plot PC2
+    plt.subplot(1, 2, 2)
+    plt.imshow(pc2_image.T, cmap="gray")
+    plt.title("Second Principal Component (PC2)")
+    plt.colorbar()
+
+    plt.suptitle("First Two Principal Components as 64x64 Images", size=16)
+    plt.show()
+
+    # Convert data points to 64x64 images and visualize some samples from each cluster
+    image_data = data.reshape(-1, 64, 64)  # Assuming the data is flattened 64x64 images
+    fig, axes = plt.subplots(optimal_clusters, 5, figsize=(15, 15))
+
+    for cluster in range(optimal_clusters):
+        cluster_indices = np.where(cluster_labels == cluster)[0]
+        selected_images = image_data[
+            cluster_indices[:5]
+        ]  # Select the first 5 images for each cluster
+
+        for i, ax in enumerate(axes[cluster]):
+            if i < len(selected_images):
+                ax.imshow(selected_images[i].T, cmap="gray")
+                ax.set_title(f"Cluster {cluster}")
+            ax.axis("off")
+        axes[cluster, 0].set_ylabel(f"Cluster {cluster}", size="large")
+
+    plt.suptitle("Sample Images from Each Cluster", size=20)
     plt.show()
 
 
@@ -1321,6 +1415,10 @@ def main(args):
         plot_confusion_matrix(
             args.flip_data
         )  # if args.confusion == True, then plots confusion matrix
+    if args.cluster_2:
+        cluster_2_get_k()
+    if args.cluster_2_char:
+        cluster_2_char()
 
 
 if __name__ == "__main__":
@@ -1349,6 +1447,9 @@ if __name__ == "__main__":
 
     parser.add_argument("--num_clusters", type=int, default=2)
     parser.add_argument("--transpose_cluster_data", action="store_true", default=False)
+
+    parser.add_argument("--cluster_2", action="store_true", default=False)
+    parser.add_argument("--cluster_2_char", action="store_true", default=False)
 
     args = parser.parse_args()
     main(args)
