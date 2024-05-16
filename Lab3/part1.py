@@ -18,6 +18,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 from collections import Counter
 from itertools import islice
+from matplotlib.patches import Rectangle
 from sklearn.cluster import KMeans
 
 
@@ -804,7 +805,7 @@ def CV_block():
     block_size = 16
     num_blocks = 4
     total_blocks = num_blocks**2
-    k = 5  # Number of folds in k-fold cross-validation
+    k = 2  # Number of folds in k-fold cross-validation
 
     # Prepare the data in blocks
     def prepare_blocks(data):
@@ -825,19 +826,6 @@ def CV_block():
 
     blocks = prepare_blocks(data)
 
-    fig, axes = plt.subplots(nrows=num_blocks, ncols=num_blocks, figsize=(8, 8))
-
-    for i in range(num_blocks):
-        for j in range(num_blocks):
-            ax = axes[i, j]
-            block_index = i * num_blocks + j
-            block_image = blocks[5, block_index].reshape(block_size, block_size)
-            ax.imshow(block_image, cmap="gray", interpolation="none")
-            ax.axis("off")  # Turn off axis numbering
-
-    plt.tight_layout()
-    plt.show()
-
     # Initialize scores
     scores_methods = {
         name: np.zeros((total_blocks, k))
@@ -856,52 +844,65 @@ def CV_block():
 
             y_train, y_test = data_labels[train_index], data_labels[test_index]
 
-            # RF
-            rf_score, _, _, _, _ = RF(X_train, y_train, X_test, y_test)
-            scores_methods["RF"][block_index, fold_index] = rf_score
+            # Evaluate each classifier and record scores
+            for name, method in [
+                ("RF", RF),
+                ("GBM", GBM),
+                ("NN", suppress_print(NN)),
+                ("Lasso", lasso),
+                ("SVC", SVC_),
+            ]:
+                score, *_ = method(X_train, y_train, X_test, y_test)
+                scores_methods[name][block_index, fold_index] = score
 
-            # GBM
-            gbm_score, _, _, _, _ = GBM(X_train, y_train, X_test, y_test)
-            scores_methods["GBM"][block_index, fold_index] = gbm_score
-
-            # NN (modify for cross-validation)
-            NN_suppressed = suppress_print(NN)
-            nn_score, _, _, _, _ = NN_suppressed(X_train, y_train, X_test, y_test)
-            scores_methods["NN"][block_index, fold_index] = nn_score
-
-            # Lasso
-            lasso_score, _, _, _, _ = lasso(X_train, y_train, X_test, y_test)
-            scores_methods["Lasso"][block_index, fold_index] = lasso_score
-
-            # SVC
-            svc_score, _, _, _, _ = SVC_(X_train, y_train, X_test, y_test)
-            print(svc_score)
-            scores_methods["SVC"][block_index, fold_index] = svc_score
-
-    # Compute average scores across folds for each method
-    average_scores = {
-        name: np.mean(scores, axis=1) for name, scores in scores_methods.items()
-    }
+    # Compute average scores across folds for each method and identify best blocks
+    best_blocks = {}
+    average_scores = {}
+    for name, scores in scores_methods.items():
+        average_scores[name] = np.mean(scores, axis=1)
+        best_blocks[name] = np.argmax(average_scores[name])
 
     # Visualization
-    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(12, 18))
+    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(10, 15))
     titles = [
-        "Heatmap of RF",
-        "Heatmap of GBM",
-        "Heatmap of NN",
-        "Heatmap of Lasso",
-        "Heatmap of SVC",
+        "Block performance of RF",
+        "Block performance of GBM",
+        "Block performance of NN",
+        "Block performance of Lasso",
+        "Block performance of SVC",
     ]
     for ax, (name, scores) in zip(axes.flat, average_scores.items()):
         heatmap = ax.imshow(scores.reshape(4, 4).T, cmap="viridis", aspect="auto")
         ax.set_title(titles.pop(0))
         fig.colorbar(heatmap, ax=ax)
+
+        ax.set_xticks([])  # Removes x-axis tick marks
+        ax.set_yticks([])  # Removes y-axis tick marks
+        ax.set_xlabel("")  # Ensures no x-axis label
+        ax.set_ylabel("")  # Ensures no y-axis label
+
+        # Retrieve best block coordinates correctly
+        best_block_index = best_blocks[name]
+        best_block_row, best_block_col = divmod(best_block_index, 4)
+
+        # Adjust the rectangle placement
+        # The coordinates for the rectangle need to match the lower-left corner of the heatmap block.
+        # Add 0.5 offset if the alignment is still off.
+        rectangle = Rectangle(
+            (best_block_row - 0.5, best_block_col - 0.5),
+            1,
+            1,
+            fill=False,
+            edgecolor="red",
+            lw=2,
+        )
+        ax.add_patch(rectangle)
     # Hide the last subplot if it's not used
     if len(average_scores) < axes.size:
         for i in range(len(average_scores), axes.size):
             axes.flat[i].axis("off")
 
-    plt.tight_layout()
+    plt.tight_layout(pad=3.0)
     plt.show()
 
 
