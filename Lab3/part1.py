@@ -1319,22 +1319,22 @@ def cluster(num_clusters=2, transpose=False):
 
         # KMeans clustering for cat data
         plt.subplot(2, 2, 1)
-        plt.imshow(cat_clusters_kmean_reshaped, cmap="grey")
+        plt.imshow(cat_clusters_kmean_reshaped, cmap="inferno")
         plt.title("Cat Clusters KMeans")
 
         # GMM clustering for cat data
         plt.subplot(2, 2, 2)
-        plt.imshow(cat_clusters_gmm_reshaped, cmap="grey")
+        plt.imshow(cat_clusters_gmm_reshaped, cmap="inferno")
         plt.title("Cat Clusters GMM")
 
         # KMeans clustering for dog data
         plt.subplot(2, 2, 3)
-        plt.imshow(dog_clusters_kmean_reshaped, cmap="grey")
+        plt.imshow(dog_clusters_kmean_reshaped, cmap="inferno")
         plt.title("Dog Clusters KMeans")
 
         # GMM clustering for dog data
         plt.subplot(2, 2, 4)
-        plt.imshow(dog_clusters_gmm_reshaped, cmap="grey")
+        plt.imshow(dog_clusters_gmm_reshaped, cmap="inferno")
         plt.title("Dog Clusters GMM")
         plt.suptitle(f"Clustering Results with {num_clusters} Clusters", fontsize=16)
         plt.tight_layout()
