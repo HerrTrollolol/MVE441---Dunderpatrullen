@@ -1206,9 +1206,7 @@ def cluster_2_char():
 
 def cluster_get_k():
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
-    data_labels = np.loadtxt(
-        "data/labels.csv", delimiter=","
-    )  # Assuming labels are in a separate file
+    data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
 
     data = StandardScaler().fit_transform(data)
 
@@ -1223,7 +1221,7 @@ def cluster_get_k():
     bic_gmm_dog = []
 
     for num_clusters in cluster_iterate:
-        print(f"cluster: {num_clusters}/[{max(cluster_iterate)}]")
+        print(f"cluster: [{num_clusters}/{max(cluster_iterate)}]")
         # KMeans clustering for cat data
         kmeans_cat = KMeans(n_clusters=num_clusters)
         kmeans_cat.fit(data_cat)
