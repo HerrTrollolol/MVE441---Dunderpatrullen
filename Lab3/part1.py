@@ -1529,7 +1529,7 @@ def main(args):
         cluster_2_get_k()
     if args.cluster_2_char:
         cluster_2_char()
-    if args.cluster_get_k:
+    if args.cluster_2_get_k:
         cluster_2_get_k()
 
 
