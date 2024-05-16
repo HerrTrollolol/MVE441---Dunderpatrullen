@@ -1525,8 +1525,6 @@ def main(args):
         plot_confusion_matrix(
             args.flip_data
         )  # if args.confusion == True, then plots confusion matrix
-    if args.cluster_2:
-        cluster_2_get_k()
     if args.cluster_2_char:
         cluster_2_char()
     if args.cluster_get_k:
