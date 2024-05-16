@@ -659,7 +659,14 @@ def plot_performance(scores):
 
 
 def plot_features(model_feature_importances, flip_data):
-    _, _, data_test, data_labels, _, _, _ = load_data(flip_data)
+    (
+        _,
+        _,
+        data_test,
+        data_labels,
+        _,
+        _,
+    ) = load_data(flip_data)
 
     # Filter data based on labels
     label0_data = data_test[data_labels == 0]
