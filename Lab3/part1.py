@@ -1531,6 +1531,8 @@ def main(args):
         cluster_2_char()
     if args.cluster_2_get_k:
         cluster_2_get_k()
+    if args.cluster_2_get_k:
+        cluster_2_get_k()
 
 
 if __name__ == "__main__":
@@ -1563,6 +1565,7 @@ if __name__ == "__main__":
     parser.add_argument("--cluster_2", action="store_true", default=False)
     parser.add_argument("--cluster_2_char", action="store_true", default=False)
     parser.add_argument("--cluster_get_k", action="store_true", default=False)
+    parser.add_argument("--cluster_2_get_k", action="store_true", default=False)
 
     args = parser.parse_args()
     main(args)
