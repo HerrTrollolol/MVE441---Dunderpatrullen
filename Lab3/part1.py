@@ -1135,10 +1135,10 @@ def cluster_2_char():
     data = scaler.fit_transform(data)
 
     # Define the optimal number of clusters
-    optimal_clusters = 5
+    optimal_clusters = 4
 
     # Perform Gaussian Mixture Model clustering
-    gmm = GaussianMixture(n_components=optimal_clusters, random_state=0)
+    gmm = GaussianMixture(n_components=optimal_clusters)
     gmm.fit(data)
     cluster_labels = gmm.predict(data)
 
@@ -1210,18 +1210,19 @@ def cluster_get_k():
 
     data = StandardScaler().fit_transform(data)
 
-    data_cat = data[np.where(data_labels == 0)[0]]
-    data_dog = data[np.where(data_labels == 1)[0]]
+    data_cat = data[np.where(data_labels == 0)[0]].T
+    data_dog = data[np.where(data_labels == 1)[0]].T
 
-    cluster_iterate = range(2, 10)
+    cluster_iterate_kmeans = range(2, 200, 5)
+    cluster_iterate_gmm = range(2, 15)
 
     inertia_kmeans_cat = []
     bic_gmm_cat = []
     inertia_kmeans_dog = []
     bic_gmm_dog = []
 
-    for num_clusters in cluster_iterate:
-        print(f"cluster: [{num_clusters}/{max(cluster_iterate)}]")
+    for num_clusters in cluster_iterate_kmeans:
+        print(f"cluster: [{num_clusters}/{max(cluster_iterate_kmeans)}]")
         # KMeans clustering for cat data
         kmeans_cat = KMeans(n_clusters=num_clusters)
         kmeans_cat.fit(data_cat)
@@ -1229,17 +1230,17 @@ def cluster_get_k():
             kmeans_cat.inertia_
         )  # Using inertia as a proxy for BIC for KMeans
 
-        # GMM clustering for cat data
-        gmm_cat = GaussianMixture(n_components=num_clusters)
-        gmm_cat.fit(data_cat)
-        bic_gmm_cat.append(gmm_cat.bic(data_cat))
-
-        # KMeans clustering for dog data
         kmeans_dog = KMeans(n_clusters=num_clusters)
         kmeans_dog.fit(data_dog)
         inertia_kmeans_dog.append(
             kmeans_dog.inertia_
         )  # Using inertia as a proxy for BIC for KMeans
+    for num_clusters in cluster_iterate_gmm:
+        print(f"cluster: [{num_clusters}/{max(cluster_iterate_gmm)}]")
+        # GMM clustering for cat data
+        gmm_cat = GaussianMixture(n_components=num_clusters)
+        gmm_cat.fit(data_cat)
+        bic_gmm_cat.append(gmm_cat.bic(data_cat))
 
         # GMM clustering for dog data
         gmm_dog = GaussianMixture(n_components=num_clusters)
@@ -1251,8 +1252,8 @@ def cluster_get_k():
 
     # Subplot for KMeans
     plt.subplot(1, 2, 1)
-    plt.plot(cluster_iterate, inertia_kmeans_cat, label="KMeans Cat", marker="o")
-    plt.plot(cluster_iterate, inertia_kmeans_dog, label="KMeans Dog", marker="o")
+    plt.plot(cluster_iterate_kmeans, inertia_kmeans_cat, label="KMeans Cat", marker="o")
+    plt.plot(cluster_iterate_kmeans, inertia_kmeans_dog, label="KMeans Dog", marker="o")
     plt.xlabel("Number of Clusters")
     plt.ylabel("Inertia")
     plt.title("KMeans Inertia for Cat and Dog Data")
@@ -1261,8 +1262,8 @@ def cluster_get_k():
 
     # Subplot for GMM
     plt.subplot(1, 2, 2)
-    plt.plot(cluster_iterate, bic_gmm_cat, label="GMM Cat", marker="o")
-    plt.plot(cluster_iterate, bic_gmm_dog, label="GMM Dog", marker="o")
+    plt.plot(cluster_iterate_gmm, bic_gmm_cat, label="GMM Cat", marker="o")
+    plt.plot(cluster_iterate_gmm, bic_gmm_dog, label="GMM Dog", marker="o")
     plt.xlabel("Number of Clusters")
     plt.ylabel("BIC")
     plt.title("GMM BIC for Cat and Dog Data")
