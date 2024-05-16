@@ -1204,6 +1204,80 @@ def cluster_2_char():
     plt.show()
 
 
+def cluster_get_k():
+    data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
+    data_labels = np.loadtxt(
+        "data/labels.csv", delimiter=","
+    )  # Assuming labels are in a separate file
+
+    data = StandardScaler().fit_transform(data)
+
+    data_cat = data[np.where(data_labels == 0)[0]]
+    data_dog = data[np.where(data_labels == 1)[0]]
+
+    cluster_iterate = range(2, 10)
+
+    inertia_kmeans_cat = []
+    bic_gmm_cat = []
+    inertia_kmeans_dog = []
+    bic_gmm_dog = []
+
+    for num_clusters in cluster_iterate:
+        print(f"cluster: {num_clusters}/[{max(cluster_iterate)}]")
+        # KMeans clustering for cat data
+        kmeans_cat = KMeans(n_clusters=num_clusters)
+        kmeans_cat.fit(data_cat)
+        inertia_kmeans_cat.append(
+            kmeans_cat.inertia_
+        )  # Using inertia as a proxy for BIC for KMeans
+
+        # GMM clustering for cat data
+        gmm_cat = GaussianMixture(n_components=num_clusters)
+        gmm_cat.fit(data_cat)
+        bic_gmm_cat.append(gmm_cat.bic(data_cat))
+
+        # KMeans clustering for dog data
+        kmeans_dog = KMeans(n_clusters=num_clusters)
+        kmeans_dog.fit(data_dog)
+        inertia_kmeans_dog.append(
+            kmeans_dog.inertia_
+        )  # Using inertia as a proxy for BIC for KMeans
+
+        # GMM clustering for dog data
+        gmm_dog = GaussianMixture(n_components=num_clusters)
+        gmm_dog.fit(data_dog)
+        bic_gmm_dog.append(gmm_dog.bic(data_dog))
+
+        # Plotting the values
+    plt.figure(figsize=(12, 6))
+
+    # Subplot for KMeans
+    plt.subplot(1, 2, 1)
+    plt.plot(cluster_iterate, inertia_kmeans_cat, label="KMeans Cat", marker="o")
+    plt.plot(cluster_iterate, inertia_kmeans_dog, label="KMeans Dog", marker="o")
+    plt.xlabel("Number of Clusters")
+    plt.ylabel("Inertia")
+    plt.title("KMeans Inertia for Cat and Dog Data")
+    plt.legend()
+    plt.grid(True)
+
+    # Subplot for GMM
+    plt.subplot(1, 2, 2)
+    plt.plot(cluster_iterate, bic_gmm_cat, label="GMM Cat", marker="o")
+    plt.plot(cluster_iterate, bic_gmm_dog, label="GMM Dog", marker="o")
+    plt.xlabel("Number of Clusters")
+    plt.ylabel("BIC")
+    plt.title("GMM BIC for Cat and Dog Data")
+    plt.legend()
+    plt.grid(True)
+
+    # Add a super title for the entire figure
+    plt.suptitle("Clustering Metrics for Cat and Dog Data", fontsize=16)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
+
+
 def cluster(num_clusters=2, transpose=False):
     data = np.loadtxt("data/CATSnDOGS.csv", delimiter=",", skiprows=1)
     data_labels = np.loadtxt("data/Labels.csv", delimiter=",", skiprows=1)
@@ -1211,24 +1285,60 @@ def cluster(num_clusters=2, transpose=False):
     data = StandardScaler().fit_transform(data)
 
     if transpose:  # This is for the task 2e
-        data_ew = data.T
-        # Apply K-means clustering
-        kmeans = KMeans(n_clusters=num_clusters, random_state=0)
-        kmeans.fit(data_ew)
-        clusters = kmeans.predict(data_ew)
+        data_cat = data[np.where(data_labels == 0)[0]].T
+        data_dog = data[np.where(data_labels == 1)[0]].T
 
-        new_clusters = clusters.reshape(64, 64)
-        new_clusters = np.rot90(new_clusters, k=-1)
+        # KMeans clustering for cat data
+        kmeans_cat = KMeans(n_clusters=num_clusters)
+        kmeans_cat.fit(data_cat)
+        cat_clusters_kmean = kmeans_cat.predict(data_cat)
 
-        image = data[0].reshape(64, 64)
-        image = np.rot90(image, k=-1)
+        # GMM clustering for cat data
+        gmm_cat = GaussianMixture(n_components=num_clusters)
+        gmm_cat.fit(data_cat)
+        cat_clusters_gmm = gmm_cat.predict(data_cat)
 
-        plt.figure(figsize=(10, 5))
-        plt.subplot(1, 2, 1)
-        plt.imshow(image, cmap="gray")
-        plt.subplot(1, 2, 2)
-        plt.imshow(image, cmap="gray")
-        plt.imshow(new_clusters, cmap="plasma", alpha=0.2)
+        # KMeans clustering for dog data
+        kmeans_dog = KMeans(n_clusters=num_clusters)
+        kmeans_dog.fit(data_dog)
+        dog_clusters_kmean = kmeans_dog.predict(data_dog)
+
+        # GMM clustering for dog data
+        gmm_dog = GaussianMixture(n_components=num_clusters)
+        gmm_dog.fit(data_dog)
+        dog_clusters_gmm = gmm_dog.predict(data_dog)
+
+        # Reshape clusters for visualization if necessary
+        # Assuming clusters are 1D and need to be reshaped into 2D for visualization
+        cat_clusters_kmean_reshaped = cat_clusters_kmean.reshape(64, 64).T
+        cat_clusters_gmm_reshaped = cat_clusters_gmm.reshape(64, 64).T
+        dog_clusters_kmean_reshaped = dog_clusters_kmean.reshape(64, 64).T
+        dog_clusters_gmm_reshaped = dog_clusters_gmm.reshape(64, 64).T
+
+        # Create subplots for visualization
+        plt.figure(figsize=(10, 10))
+
+        # KMeans clustering for cat data
+        plt.subplot(2, 2, 1)
+        plt.imshow(cat_clusters_kmean_reshaped, cmap="grey")
+        plt.title("Cat Clusters KMeans")
+
+        # GMM clustering for cat data
+        plt.subplot(2, 2, 2)
+        plt.imshow(cat_clusters_gmm_reshaped, cmap="grey")
+        plt.title("Cat Clusters GMM")
+
+        # KMeans clustering for dog data
+        plt.subplot(2, 2, 3)
+        plt.imshow(dog_clusters_kmean_reshaped, cmap="grey")
+        plt.title("Dog Clusters KMeans")
+
+        # GMM clustering for dog data
+        plt.subplot(2, 2, 4)
+        plt.imshow(dog_clusters_gmm_reshaped, cmap="grey")
+        plt.title("Dog Clusters GMM")
+        plt.suptitle(f"Clustering Results with {num_clusters} Clusters", fontsize=16)
+        plt.tight_layout()
         plt.show()
 
     else:  # This is for task 1c
@@ -1419,6 +1529,8 @@ def main(args):
         cluster_2_get_k()
     if args.cluster_2_char:
         cluster_2_char()
+    if args.cluster_get_k:
+        cluster_2_get_k()
 
 
 if __name__ == "__main__":
@@ -1450,6 +1562,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--cluster_2", action="store_true", default=False)
     parser.add_argument("--cluster_2_char", action="store_true", default=False)
+    parser.add_argument("--cluster_get_k", action="store_true", default=False)
 
     args = parser.parse_args()
     main(args)
